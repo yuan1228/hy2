@@ -1,15 +1,12 @@
 #!/bin/bash
-
-# --- 自动同步更新逻辑 ---
 REMOTE_URL="https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh"
-
 if [ -f "/usr/local/bin/yuan" ]; then
     TMP_FILE=$(mktemp)
     curl -sL "$REMOTE_URL" > "$TMP_FILE"
     if ! cmp -s "$TMP_FILE" /usr/local/bin/yuan; then
         cp "$TMP_FILE" /usr/local/bin/yuan
         chmod +x /usr/local/bin/yuan
-        echo "检测到新版本，已自动同步更新..."
+        echo "Updating..."
         sleep 1
     fi
     rm -f "$TMP_FILE"
@@ -17,8 +14,6 @@ else
     cp "$0" /usr/local/bin/yuan
     chmod +x /usr/local/bin/yuan
 fi
-
-# --- 主循环界面 ---
 while true; do
     clear
     echo "===================================================="
@@ -36,17 +31,14 @@ while true; do
     echo ""
     echo "===================================================="
     read -p "指令 [0-6]: " choice
-    
     case $choice in
         1) 
-            read -p "端口 [1-65535] (默认 45678): " P
+            read -p "端口 (默认 45678): " P
             read -p "密码: " PASS
             read -p "伪装域名 (默认 aws.amazon.com): " SNI
             bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
             mkdir -p /etc/hysteria
-            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
-                -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
-                -subj "/CN=${SNI:-aws.amazon.com}" -days 36500 2>/dev/null
+            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=${SNI:-aws.amazon.com}" -days 36500 2>/dev/null
             cat <<EOF > /etc/hysteria/config.yaml
 listen: :${P:-45678}
 tls:
