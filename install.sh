@@ -1,19 +1,26 @@
 #!/bin/bash
+
+# --- 自动更新机制 (独立分支) ---
 REMOTE_URL="https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh"
-if [ -f "/usr/local/bin/yuan" ]; then
+if [ -f "/usr/local/bin/yuan" ] && [ "$1" != "--no-update" ]; then
     TMP_FILE=$(mktemp)
     curl -sL "$REMOTE_URL" > "$TMP_FILE"
     if ! cmp -s "$TMP_FILE" /usr/local/bin/yuan; then
-        cp "$TMP_FILE" /usr/local/bin/yuan
+        mv "$TMP_FILE" /usr/local/bin/yuan
         chmod +x /usr/local/bin/yuan
-        echo "Updating..."
-        sleep 1
+        echo "更新完成，请重新输入 yuan"
+        exit 0
     fi
     rm -f "$TMP_FILE"
-else
+fi
+
+# --- 首次安装 ---
+if [ ! -f "/usr/local/bin/yuan" ]; then
     cp "$0" /usr/local/bin/yuan
     chmod +x /usr/local/bin/yuan
 fi
+
+# --- 主循环界面 ---
 while true; do
     clear
     echo "===================================================="
