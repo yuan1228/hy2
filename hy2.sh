@@ -1,41 +1,33 @@
 #!/bin/bash
 
 # ==========================================
-# HY2 瑞士军刀管理面板 (纯净专业版)
+# YUAN CONTROL PANEL - HYSTERIA2 (V4.1)
 # ==========================================
 
-# 颜色设置
-RED='\e[91m'
-GREEN='\e[92m'
-YELLOW='\e[93m'
-CYAN='\e[96m'
-NC='\e[0m'
-
-# --- 快捷指令部署 ---
+# 快捷命令安装函数
 install_shortcut() {
-    SCRIPT_PATH=$(readlink -f "$0")
-    if [ "$SCRIPT_PATH" != "/usr/local/bin/yuan" ]; then
-        cp "$SCRIPT_PATH" /usr/local/bin/yuan
+    if [ ! -f "/usr/local/bin/yuan" ]; then
+        cp "$0" /usr/local/bin/yuan
         chmod +x /usr/local/bin/yuan
     fi
 }
 
-# --- 核心部署 ---
+# 部署模块
 install_hy2() {
     clear
     echo "--- 部署 Hysteria2 ---"
-    read -p "端口 [1-65535] (默认 45678): " INPUT_PORT
-    PORT=${INPUT_PORT:-45678}
-    read -p "连接密码 (默认随机): " INPUT_PASS
-    PASSWORD=${INPUT_PASS:-$(openssl rand -hex 8)}
-    read -p "伪装域名 (默认 aws.amazon.com): " INPUT_SNI
+    read -p "端口 [1-65535] (默认 45678): " PORT
+    PORT=${PORT:-45678}
+    read -p "密码 (默认随机): " PASSWORD
+    PASSWORD=${PASSWORD:-$(openssl rand -hex 8)}
+    read -p "伪装域名 (默认 aws.amazon.com): " SNI
     SNI=${INPUT_SNI:-aws.amazon.com}
     OBFS_PASS=$(openssl rand -hex 6)
 
-    echo "正在拉取组件..."
+    echo "安装核心..."
     bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
 
-    echo "生成配置与证书..."
+    echo "生成配置..."
     mkdir -p /etc/hysteria
     openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
         -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
@@ -61,35 +53,33 @@ masquerade:
 ignoreClientBandwidth: true
 EOF
 
+    chmod 777 /etc/hysteria/server.key /etc/hysteria/server.crt
     chown -R hysteria:hysteria /etc/hysteria/
     systemctl restart hysteria-server.service
     
     IP=$(curl -4s ipv4.icanhazip.com)
     URI="hysteria2://$PASSWORD@$IP:$PORT/?insecure=1&sni=$SNI&obfs=salamander&obfs-password=$OBFS_PASS#Hy2-$PORT"
     echo "$URI" > /etc/hysteria/share_link.txt
-    
     echo "部署完毕。"
     read -n 1 -s -r -p "按任意键返回..."
 }
 
+# 运行主逻辑
 install_shortcut
 
 while true; do
     clear
-    # 自动环境检测
     STATUS=$(systemctl is-active hysteria-server 2>/dev/null)
-    [[ "$STATUS" == "active" ]] && S="RUNNING" || S="STOPPED"
-    
     echo "=================================="
-    echo " YUAN NETWORK CONTROL PANEL"
-    echo " STATUS: $S | PORT: $(grep 'listen:' /etc/hysteria/config.yaml 2>/dev/null | awk '{print $2}' | tr -d ':')"
+    echo " YUAN CONTROL PANEL"
+    echo " STATUS: $STATUS | PORT: $(grep 'listen:' /etc/hysteria/config.yaml 2>/dev/null | awk '{print $2}' | tr -d ':')"
     echo "=================================="
     echo " 1. 安装/重置节点"
-    echo " 2. 查看节点链接"
-    echo " 3. 实时运行日志"
-    echo " 4. BBR内核加速"
-    echo " 5. 升级二进制内核"
-    echo " 6. 深度卸载"
+    echo " 2. 查看节点信息"
+    echo " 3. 运行日志"
+    echo " 4. BBR加速"
+    echo " 5. 升级内核"
+    echo " 6. 卸载"
     echo " 0. 退出"
     echo "=================================="
     read -p "指令 [0-6]: " choice
