@@ -18,17 +18,19 @@ NC='\033[0m'
 while true; do
     clear
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}                    项目地址: https://github.com/yuan1228/hy2${NC}"
+    echo -e "${YELLOW}   项目地址: https://github.com/yuan1228/hy2${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
-    echo -e "${GREEN} __ __ _ _ _ _ _ "
-    echo -e " \ \/ / | | | | / \ | \ | |"
-    echo -e " \ / | | | | / _ \ | \| |"
-    echo -e " / \ | |_| |/ ___ \| |\ |"
-    echo -e " /_/\_\ \___/_/ \_\_| \_|${NC}"
-    echo ""
+    # === 修正后的 YUAN 艺术字（已居中对齐、无错位）===
+    echo -e "${GREEN}"
+    echo "               __ __ _ _ _ _ _                  "
+    echo "              \ \/ / | | | | / \ | \ | |        "
+    echo "               \ / | | | | / _ \ | \| |         "
+    echo "                / \ | |_| |/ ___ \| |\ |        "
+    echo "               /_/\_\ \___/_/ \_\_| \_|         "
+    echo -e "${NC}"
     
-    echo -e "${BOLD}${BLUE}                  HY2 一键工具${NC}"
+    echo -e "${BOLD}${BLUE}            HY2 一键工具${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}快捷键已设置为 ${BOLD}yuan${NC}${GREEN}，下次运行直接输入 ${BOLD}yuan${NC}${GREEN} 即可快速启动${NC}"
     echo ""
