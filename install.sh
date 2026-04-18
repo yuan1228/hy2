@@ -1,20 +1,6 @@
 #!/bin/bash
 
-# --- 自动更新机制 ---
-REMOTE_URL="https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh"
-if [ -f "/usr/local/bin/yuan" ] && [ "$1" != "--no-update" ]; then
-    TMP_FILE=$(mktemp)
-    curl -sL "$REMOTE_URL" > "$TMP_FILE"
-    if ! cmp -s "$TMP_FILE" /usr/local/bin/yuan; then
-        mv "$TMP_FILE" /usr/local/bin/yuan
-        chmod +x /usr/local/bin/yuan
-        echo "更新完成，请重新输入 yuan"
-        exit 0
-    fi
-    rm -f "$TMP_FILE"
-fi
-
-# --- 首次安装 ---
+# --- 快捷入口安装 ---
 if [ ! -f "/usr/local/bin/yuan" ]; then
     cp "$0" /usr/local/bin/yuan
     chmod +x /usr/local/bin/yuan
@@ -23,10 +9,18 @@ fi
 # --- 主循环界面 ---
 while true; do
     clear
-    echo "===================================================="
+    echo "----------------------------------------------------"
     echo " 项目地址: https://github.com/yuan1228/hy2"
-    echo " 核心架构: H Y S T E R I A  2  M A N A G E R"
-    echo "===================================================="
+    echo "----------------------------------------------------"
+    echo "  __  __  _   _    _    _   _ "
+    echo "  \ \/ / | | | |  / \  | \ | |"
+    echo "   \  /  | | | | / _ \ |  \| |"
+    echo "   /  \  | |_| |/ ___ \| |\  |"
+    echo "  /_/\_\  \___/_/   \_\_| \_|"
+    echo ""
+    echo "             HY2 一键工具"
+    echo "----------------------------------------------------"
+    echo "快捷键已设置为 yuan, 下次运行输入 yuan 可快速启动"
     echo ""
     echo " 1. 安装/重置 Hysteria2"
     echo " 2. 查看节点链接"
@@ -35,17 +29,19 @@ while true; do
     echo " 5. 升级内核"
     echo " 6. 深度卸载"
     echo " 0. 退出"
-    echo ""
-    echo "===================================================="
+    echo "----------------------------------------------------"
     read -p "指令 [0-6]: " choice
+    
     case $choice in
         1) 
-            read -p "端口 (默认 45678): " P
+            read -p "端口 [1-65535] (默认 45678): " P
             read -p "密码: " PASS
             read -p "伪装域名 (默认 aws.amazon.com): " SNI
             bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
             mkdir -p /etc/hysteria
-            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=${SNI:-aws.amazon.com}" -days 36500 2>/dev/null
+            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+                -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
+                -subj "/CN=${SNI:-aws.amazon.com}" -days 36500 2>/dev/null
             cat <<EOF > /etc/hysteria/config.yaml
 listen: :${P:-45678}
 tls:
@@ -67,14 +63,9 @@ ignoreClientBandwidth: true
 EOF
             chown -R hysteria:hysteria /etc/hysteria/
             systemctl restart hysteria-server.service
-            
-            # --- 自动识别地区并命名 ---
             IP=$(curl -4s ipv4.icanhazip.com)
-            LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
-            [ -z "$LOC" ] && LOC="Unknown"
-            echo "hysteria2://${PASS:-$(openssl rand -hex 8)}@$IP:${P:-45678}/?insecure=1&sni=${SNI:-aws.amazon.com}#${LOC}_HY2" > /etc/hysteria/share_link.txt
-            
-            echo "安装完成，节点已命名为: ${LOC}_HY2" && read -n 1 -s -r -p "按任意键..." ;;
+            echo "hysteria2://${PASS:-$(openssl rand -hex 8)}@$IP:${P:-45678}/?insecure=1&sni=${SNI:-aws.amazon.com}#HY2" > /etc/hysteria/share_link.txt
+            echo "安装完成。" && read -n 1 -s -r -p "按任意键..." ;;
         2) cat /etc/hysteria/share_link.txt 2>/dev/null || echo "无配置"; echo; read -n 1 -s -r -p "按任意键..." ;;
         3) journalctl -u hysteria-server -f --output cat ;;
         4) echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf; echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf; sysctl -p; read -n 1 -s -r -p "按任意键..." ;;
