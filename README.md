@@ -1,0 +1,17 @@
+# HY2 一键管理工具
+
+专为 Linux VPS 设计的 Hysteria2 部署与管理工具。旨在通过极简的交互逻辑，实现节点的快速安装、运行状态监控、内核优化及无损维护。
+
+## 功能特性
+- **一键部署**：自动拉取官方核心，配置自签证书与防探测伪装。
+- **全局管理**：安装后通过 `yuan` 指令即可随时呼出控制面板。
+- **内核优化**：内置 BBR 加速配置，大幅提升网络吞吐能力。
+- **状态监控**：实时查看服务状态与运行日志，快速定位网络异常。
+- **极致纯净**：无多余装饰字符，纯文本交互，适配所有主流 SSH 终端。
+
+## 快速开始
+
+在你的 VPS 上运行以下命令即可完成部署及快捷指令安装：
+
+```bash
+bash <(curl -sL [https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/hy2.sh](https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/hy2.sh))
