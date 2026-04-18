@@ -1,26 +1,19 @@
 #!/bin/bash
-
-# --- 自动更新机制 ---
 REMOTE_URL="https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh"
-if [ -f "/usr/local/bin/yuan" ] && [ "$1" != "--no-update" ]; then
+if [ -f "/usr/local/bin/yuan" ]; then
     TMP_FILE=$(mktemp)
     curl -sL "$REMOTE_URL" > "$TMP_FILE"
     if ! cmp -s "$TMP_FILE" /usr/local/bin/yuan; then
-        mv "$TMP_FILE" /usr/local/bin/yuan
+        cp "$TMP_FILE" /usr/local/bin/yuan
         chmod +x /usr/local/bin/yuan
-        echo "更新完成，请重新输入 yuan"
-        exit 0
+        echo "Updating..."
+        sleep 1
     fi
     rm -f "$TMP_FILE"
-fi
-
-# --- 首次安装 ---
-if [ ! -f "/usr/local/bin/yuan" ]; then
+else
     cp "$0" /usr/local/bin/yuan
     chmod +x /usr/local/bin/yuan
 fi
-
-# --- 主循环界面 ---
 while true; do
     clear
     echo "===================================================="
@@ -67,14 +60,9 @@ ignoreClientBandwidth: true
 EOF
             chown -R hysteria:hysteria /etc/hysteria/
             systemctl restart hysteria-server.service
-            
-            # --- 自动识别地区并命名 ---
             IP=$(curl -4s ipv4.icanhazip.com)
-            LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
-            [ -z "$LOC" ] && LOC="Unknown"
-            echo "hysteria2://${PASS:-$(openssl rand -hex 8)}@$IP:${P:-45678}/?insecure=1&sni=${SNI:-aws.amazon.com}#${LOC}_HY2" > /etc/hysteria/share_link.txt
-            
-            echo "安装完成，节点已命名为: ${LOC}_HY2" && read -n 1 -s -r -p "按任意键..." ;;
+            echo "hysteria2://${PASS:-$(openssl rand -hex 8)}@$IP:${P:-45678}/?insecure=1&sni=${SNI:-aws.amazon.com}#HY2" > /etc/hysteria/share_link.txt
+            echo "安装完成。" && read -n 1 -s -r -p "按任意键..." ;;
         2) cat /etc/hysteria/share_link.txt 2>/dev/null || echo "无配置"; echo; read -n 1 -s -r -p "按任意键..." ;;
         3) journalctl -u hysteria-server -f --output cat ;;
         4) echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf; echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf; sysctl -p; read -n 1 -s -r -p "按任意键..." ;;
