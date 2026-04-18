@@ -1,8 +1,10 @@
 #!/bin/bash
 
 # ==========================================
-# 终极硬编码防爆版 (解决变量丢失和权限问题)
+# 终极硬编码防爆版 (带二维码生成)
 # ==========================================
+
+apt-get install -y qrencode curl >/dev/null 2>&1
 
 echo -e "\e[33m>>> 1. 强行生成自签证书...\e[0m"
 mkdir -p /etc/hysteria
@@ -42,16 +44,16 @@ systemctl enable hysteria-server.service >/dev/null 2>&1
 systemctl restart hysteria-server.service
 
 sleep 2
-systemctl status hysteria-server.service --no-pager
+
+# 获取IP并生成链接
+IP=$(curl -4s -m 2 https://www.cloudflare.com/cdn-cgi/trace | grep -oP "ip=\K.*$")
+URI="hysteria2://MyStrongPassword123@$IP:45678/?insecure=1&sni=aws.amazon.com&obfs=salamander&obfs-password=MyObfsPassword123#Hy2-Pro"
 
 echo -e "\n\e[36m======================================================\e[0m"
-echo -e "\e[32m✅ 如果上面看到绿色的 active (running)，则说明启动成功！\e[0m"
+echo -e "\e[32m✅ 服务启动成功！\e[0m"
 echo -e "\e[36m======================================================\e[0m"
-echo -e "\e[33m请在客户端手动填写以下信息：\e[0m"
-echo -e "IP: \e[32m你的服务器公网IP\e[0m"
-echo -e "端口: \e[32m45678\e[0m"
-echo -e "密码: \e[32mMyStrongPassword123\e[0m"
-echo -e "SNI: \e[32maws.amazon.com\e[0m"
-echo -e "混淆密码: \e[32mMyObfsPassword123\e[0m"
-echo -e "跳过证书验证: \e[32mTrue (开启)\e[0m"
+echo -e "🔗 节点链接 (一键复制):"
+echo -e "\e[32m$URI\e[0m"
+echo -e "\e[36m======================================================\e[0m"
+qrencode -t ANSIUTF8 "$URI"
 echo -e "\e[36m======================================================\e[0m"
