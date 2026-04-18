@@ -1,22 +1,11 @@
 #!/bin/bash
 
-# --- 快捷入口安装 ---
-if [ ! -f "/usr/local/bin/yuan" ]; then
-    cp "$0" /usr/local/bin/yuan
-    chmod +x /usr/local/bin/yuan
-fi
-#!/bin/bash
-
 # --- 自动同步更新逻辑 ---
-# 定义远程仓库脚本路径
 REMOTE_URL="https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh"
 
-# 如果已安装，先进行静默更新检查
 if [ -f "/usr/local/bin/yuan" ]; then
-    # 临时下载一份对比
     TMP_FILE=$(mktemp)
     curl -sL "$REMOTE_URL" > "$TMP_FILE"
-    # 如果远程文件和本地文件不同，则覆盖更新
     if ! cmp -s "$TMP_FILE" /usr/local/bin/yuan; then
         cp "$TMP_FILE" /usr/local/bin/yuan
         chmod +x /usr/local/bin/yuan
@@ -25,14 +14,9 @@ if [ -f "/usr/local/bin/yuan" ]; then
     fi
     rm -f "$TMP_FILE"
 else
-    # 首次安装直接拷贝
     cp "$0" /usr/local/bin/yuan
     chmod +x /usr/local/bin/yuan
 fi
-
-# --- 主循环界面 ---
-while true; do
-# ... 后续代码保持不变 ...
 
 # --- 主循环界面 ---
 while true; do
