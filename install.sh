@@ -6,27 +6,31 @@ if [ ! -f "/usr/local/bin/yuan" ]; then
     chmod +x /usr/local/bin/yuan
 fi
 
-# --- 辅助函数：输出高亮标题 ---
-print_header() {
-    # 这一行利用 ANSI 颜色代码实现蓝底白字高亮，显得非常有质感
-    printf "\e[44;37m %-50s \e[0m\n" "  YUAN  |  HYSTERIA 2  MANAGEMENT  CONSOLE"
-}
-
 # --- 主循环界面 ---
 while true; do
     clear
-    print_header
-    echo " 仓库: github.com/yuan1228/hy2"
     echo "----------------------------------------------------"
-    echo " [1] 安装 / 重置 HY2"
-    echo " [2] 查看 节点信息"
-    echo " [3] 实时 运行日志"
-    echo " [4] 开启 BBR 加速"
-    echo " [5] 升级 二进制核"
-    echo " [6] 彻底 卸载清理"
-    echo " [0] 退出 程序"
+    echo " 项目地址: https://github.com/yuan1228/hy2"
     echo "----------------------------------------------------"
-    read -p " 执行指令 ❯ " choice
+    echo "  __  __  _   _    _    _   _ "
+    echo "  \ \/ / | | | |  / \  | \ | |"
+    echo "   \  /  | | | | / _ \ |  \| |"
+    echo "   /  \  | |_| |/ ___ \| |\  |"
+    echo "  /_/\_\  \___/_/   \_\_| \_|"
+    echo ""
+    echo "             HY2 一键工具"
+    echo "----------------------------------------------------"
+    echo "快捷键已设置为 yuan, 下次运行输入 yuan 可快速启动"
+    echo ""
+    echo " 1. 安装/重置 Hysteria2"
+    echo " 2. 查看节点链接"
+    echo " 3. 运行日志"
+    echo " 4. BBR加速"
+    echo " 5. 升级内核"
+    echo " 6. 深度卸载"
+    echo " 0. 退出"
+    echo "----------------------------------------------------"
+    read -p "指令 [0-6]: " choice
     
     case $choice in
         1) 
