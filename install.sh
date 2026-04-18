@@ -97,9 +97,10 @@ set_bbr() {
 while true; do
     clear
     echo "===================================================="
-    echo "       HY2 一键管理工具 (Progress Version) by yuan1228"
+    echo "       HY2 一键管理工具 (Progress Version) "
     echo "       本项目链接：https://github.com/yuan1228/hy2"
-    echo "                               （由AI制作仅供学习参考）"
+    echo "                            （由AI制作仅供学习参考）"
+    echo "                                        by yuan1228"
     echo "===================================================="
     echo " 1. 一键安装 / 覆盖配置"
     echo " 2. 查看节点链接"
