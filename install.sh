@@ -19,26 +19,30 @@ if [ ! -f "/usr/local/bin/yuan" ]; then
     chmod +x /usr/local/bin/yuan
 fi
 
-# --- 核心部署函数 ---
+# --- 部署函数 ---
 deploy_hy2() {
     RAND_PORT=$((40000 + RANDOM % 10000))
     RAND_PASS=$(openssl rand -hex 8)
     
-    read -p "端口 (默认 $RAND_PORT): " P
+    read -p "请输入端口 (默认 $RAND_PORT): " P
     P=${P:-$RAND_PORT}
-    read -p "密码 (默认 $RAND_PASS): " PASS
+    read -p "请输入密码 (默认 $RAND_PASS): " PASS
     PASS=${PASS:-$RAND_PASS}
-    read -p "伪装域名 (默认 aws.amazon.com): " SNI
+    read -p "请输入伪装域名 (默认 aws.amazon.com): " SNI
     SNI=${SNI:-aws.amazon.com}
 
-    echo -e "\e[33m>>> 正在部署...\e[0m"
-    bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
+    echo -e "\n\e[36m[1/5] 正在从官方获取 Hysteria2 核心...\e[0m"
+    bash <(curl -fsSL https://get.hy2.sh/)
+    
+    echo -e "\e[36m[2/5] 正在创建配置目录...\e[0m"
     mkdir -p /etc/hysteria
     
+    echo -e "\e[36m[3/5] 正在生成自签名 TLS 证书 (SNI: $SNI)...\e[0m"
     openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
         -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
         -subj "/CN=$SNI" -days 36500 2>/dev/null
     
+    echo -e "\e[36m[4/5] 正在写入配置文件...\e[0m"
     OBFS_PASS=$(openssl rand -hex 6)
     cat <<EOF > /etc/hysteria/config.yaml
 listen: :$P
@@ -60,6 +64,7 @@ masquerade:
 ignoreClientBandwidth: true
 EOF
     
+    echo -e "\e[36m[5/5] 正在赋予权限并启动服务...\e[0m"
     chown -R hysteria:hysteria /etc/hysteria/
     systemctl restart hysteria-server.service
     
@@ -69,18 +74,15 @@ EOF
     URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI&obfs=salamander&obfs-password=$OBFS_PASS#${LOC}_HY2"
     echo "$URI" > /etc/hysteria/share_link.txt
     
-    echo -e "\e[32m部署完成！\e[0m"
+    echo -e "\n\e[32m部署完成！服务已就绪。\e[0m"
     read -n 1 -s -r -p "按任意键返回..."
 }
 
-# --- 加速中心函数 ---
+# --- 加速中心 ---
 set_bbr() {
-    echo "请选择队列算法:"
-    echo "1. BBR + FQ (通用高吞吐)"
-    echo "2. BBR + CAKE (低延迟/抗拥塞)"
-    read -p "选择 [1-2]: " bbr_choice
-    
+    echo -e "\e[36m正在应用网络加速策略...\e[0m"
     echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+    read -p "请选择队列算法 (1: FQ, 2: CAKE): " bbr_choice
     if [ "$bbr_choice" == "1" ]; then
         echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
     else
@@ -95,12 +97,12 @@ set_bbr() {
 while true; do
     clear
     echo "===================================================="
-    echo " 核心架构: H Y S T E R I A  2  P R O [增强控制版]"
+    echo "       HY2 一键管理工具 (Progress Version)"
     echo "===================================================="
-    echo " 1. 一键部署 (Hysteria2)"
+    echo " 1. 一键安装 / 覆盖配置"
     echo " 2. 查看节点链接"
     echo " 3. 网络加速中心 (BBR/FQ/CAKE)"
-    echo " 4. 运行日志"
+    echo " 4. 查看运行日志"
     echo " 5. 深度卸载"
     echo " 0. 退出"
     echo "===================================================="
