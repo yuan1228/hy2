@@ -16,4 +16,4 @@
 在你的VPS上运行以下命令即可完成配置及快捷指令安装：
 
 ```bash
-bash <(curl -sL [https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh](https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh))
+bash <(curl -sL https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh)
