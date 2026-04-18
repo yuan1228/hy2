@@ -19,7 +19,7 @@ if [ ! -f "/usr/local/bin/yuan" ]; then
     chmod +x /usr/local/bin/yuan
 fi
 
-# --- 核心部署函数 (已支持自定义变量) ---
+# --- 核心部署函数 ---
 deploy_hy2() {
     # 交互式获取配置
     read -p "请输入端口 (默认 45678): " P
@@ -28,16 +28,22 @@ deploy_hy2() {
     read -p "请输入伪装域名 (默认 aws.amazon.com): " SNI
     SNI=${SNI:-aws.amazon.com}
 
-    echo -e "\e[33m>>> 正在安装核心并部署配置...\e[0m"
+    # 密码校验
+    if [ -z "$PASS" ]; then
+        echo "错误：密码不能为空！"
+        read -n 1 -s -r -p "按任意键返回..."
+        return
+    fi
+
+    echo -e "\e[33m>>> 正在部署...\e[0m"
     bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
     mkdir -p /etc/hysteria
     
-    # 生成证书
     openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
         -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
         -subj "/CN=$SNI" -days 36500 2>/dev/null
     
-    # 写入配置文件
+    OBFS_PASS=$(openssl rand -hex 6)
     cat <<EOF > /etc/hysteria/config.yaml
 listen: :$P
 tls:
@@ -49,7 +55,7 @@ auth:
 obfs:
   type: salamander
   salamander:
-    password: $(openssl rand -hex 6)
+    password: $OBFS_PASS
 masquerade:
   type: proxy
   proxy:
@@ -62,23 +68,26 @@ EOF
     chown -R hysteria:hysteria /etc/hysteria/
     systemctl restart hysteria-server.service
     
-    # 生成节点链接
+    # --- 修正后的 URI 生成逻辑 ---
     IP=$(curl -4s ipv4.icanhazip.com)
     LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
     [ -z "$LOC" ] && LOC="Unknown"
-    URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI#${LOC}_HY2"
+    
+    # 强制拼接完整 URI
+    URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI&obfs=salamander&obfs-password=$OBFS_PASS#${LOC}_HY2"
     echo "$URI" > /etc/hysteria/share_link.txt
     
-    echo -e "\e[32m部署成功！端口: $P, 域名: $SNI\e[0m"
+    echo -e "\e[32m部署成功！\e[0m"
+    echo -e "链接已保存，请使用选项2查看。"
     read -n 1 -s -r -p "按任意键返回..."
 }
 
-# --- 主循环界面 ---
+# --- 主循环 ---
 while true; do
     clear
     echo "===================================================="
     echo " 项目地址: https://github.com/yuan1228/hy2"
-    echo " 核心架构: H Y S T E R I A  2  P R O [自定义版]"
+    echo " 核心架构: H Y S T E R I A  2  P R O [增强版]"
     echo "===================================================="
     echo " 1. 安装/自定义配置"
     echo " 2. 查看节点链接"
