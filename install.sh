@@ -19,63 +19,74 @@ if [ ! -f "/usr/local/bin/yuan" ]; then
     chmod +x /usr/local/bin/yuan
 fi
 
-# --- 核心部署函数 ---
+# --- 核心部署函数 (已支持自定义变量) ---
 deploy_hy2() {
-    echo -e "\e[33m>>> 正在部署 Hysteria2 完全体...\e[0m"
+    # 交互式获取配置
+    read -p "请输入端口 (默认 45678): " P
+    P=${P:-45678}
+    read -p "请输入密码: " PASS
+    read -p "请输入伪装域名 (默认 aws.amazon.com): " SNI
+    SNI=${SNI:-aws.amazon.com}
+
+    echo -e "\e[33m>>> 正在安装核心并部署配置...\e[0m"
     bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
     mkdir -p /etc/hysteria
+    
+    # 生成证书
     openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
         -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
-        -subj "/CN=aws.amazon.com" -days 36500 2>/dev/null
+        -subj "/CN=$SNI" -days 36500 2>/dev/null
     
+    # 写入配置文件
     cat <<EOF > /etc/hysteria/config.yaml
-listen: :45678
+listen: :$P
 tls:
   cert: /etc/hysteria/server.crt
   key: /etc/hysteria/server.key
 auth:
   type: password
-  password: MyStrongPassword123
+  password: $PASS
 obfs:
   type: salamander
   salamander:
-    password: MyObfsPassword123
+    password: $(openssl rand -hex 6)
 masquerade:
   type: proxy
   proxy:
-    url: https://aws.amazon.com
+    url: https://$SNI
     rewriteHost: true
 ignoreClientBandwidth: true
 EOF
+    
     chmod 777 /etc/hysteria/server.key /etc/hysteria/server.crt
     chown -R hysteria:hysteria /etc/hysteria/
     systemctl restart hysteria-server.service
     
+    # 生成节点链接
     IP=$(curl -4s ipv4.icanhazip.com)
     LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
     [ -z "$LOC" ] && LOC="Unknown"
-    URI="hysteria2://MyStrongPassword123@$IP:45678/?insecure=1&sni=aws.amazon.com&obfs=salamander&obfs-password=MyObfsPassword123#${LOC}_HY2"
+    URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI#${LOC}_HY2"
     echo "$URI" > /etc/hysteria/share_link.txt
-    echo -e "\e[32m部署成功！\e[0m"
+    
+    echo -e "\e[32m部署成功！端口: $P, 域名: $SNI\e[0m"
     read -n 1 -s -r -p "按任意键返回..."
 }
 
-# --- UI 界面 ---
+# --- 主循环界面 ---
 while true; do
     clear
     echo "===================================================="
     echo " 项目地址: https://github.com/yuan1228/hy2"
-    echo " 核心架构: H Y S T E R I A  2  P R O  [稳定版]"
+    echo " 核心架构: H Y S T E R I A  2  P R O [自定义版]"
     echo "===================================================="
-    echo ""
-    echo " 1. 强力部署/重置 (官方内核)"
+    echo " 1. 安装/自定义配置"
     echo " 2. 查看节点链接"
     echo " 3. 运行日志"
     echo " 4. BBR加速"
     echo " 5. 升级内核"
     echo " 6. 深度卸载"
     echo " 0. 退出"
-    echo ""
     echo "===================================================="
     read -p "指令 [0-6]: " choice
     case $choice in
