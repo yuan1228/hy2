@@ -1,24 +1,34 @@
 #!/bin/bash
 
-# ==========================================
-# 真正的完全体：官方内核拉取 + 硬编码防爆配置
-# ==========================================
+# --- 自动更新机制 ---
+REMOTE_URL="https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh"
+if [ -f "/usr/local/bin/yuan" ] && [ "$1" != "--no-update" ]; then
+    TMP_FILE=$(mktemp)
+    curl -sL "$REMOTE_URL" > "$TMP_FILE"
+    if ! cmp -s "$TMP_FILE" /usr/local/bin/yuan; then
+        mv "$TMP_FILE" /usr/local/bin/yuan
+        chmod +x /usr/local/bin/yuan
+        echo "更新完成，请重新输入 yuan"
+        exit 0
+    fi
+    rm -f "$TMP_FILE"
+fi
 
-echo -e "\e[33m>>> 0. 安装必要环境...\e[0m"
-apt-get update -y >/dev/null 2>&1
-apt-get install -y qrencode curl openssl >/dev/null 2>&1
+if [ ! -f "/usr/local/bin/yuan" ]; then
+    cp "$0" /usr/local/bin/yuan
+    chmod +x /usr/local/bin/yuan
+fi
 
-echo -e "\e[33m>>> 1. 拉取官方 Hysteria2 核心程序 (之前漏掉的关键步骤)...\e[0m"
-bash <(curl -fsSL https://get.hy2.sh/)
-
-echo -e "\e[33m>>> 2. 强行生成自签证书...\e[0m"
-mkdir -p /etc/hysteria
-openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
-    -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
-    -subj "/CN=aws.amazon.com" -days 36500 2>/dev/null
-
-echo -e "\e[33m>>> 3. 暴力写入定死参数的配置...\e[0m"
-cat <<EOF > /etc/hysteria/config.yaml
+# --- 核心部署函数 ---
+deploy_hy2() {
+    echo -e "\e[33m>>> 正在部署 Hysteria2 完全体...\e[0m"
+    bash <(curl -fsSL https://get.hy2.sh/) >/dev/null 2>&1
+    mkdir -p /etc/hysteria
+    openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+        -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
+        -subj "/CN=aws.amazon.com" -days 36500 2>/dev/null
+    
+    cat <<EOF > /etc/hysteria/config.yaml
 listen: :45678
 tls:
   cert: /etc/hysteria/server.crt
@@ -37,28 +47,44 @@ masquerade:
     rewriteHost: true
 ignoreClientBandwidth: true
 EOF
+    chmod 777 /etc/hysteria/server.key /etc/hysteria/server.crt
+    chown -R hysteria:hysteria /etc/hysteria/
+    systemctl restart hysteria-server.service
+    
+    IP=$(curl -4s ipv4.icanhazip.com)
+    LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
+    [ -z "$LOC" ] && LOC="Unknown"
+    URI="hysteria2://MyStrongPassword123@$IP:45678/?insecure=1&sni=aws.amazon.com&obfs=salamander&obfs-password=MyObfsPassword123#${LOC}_HY2"
+    echo "$URI" > /etc/hysteria/share_link.txt
+    echo -e "\e[32m部署成功！\e[0m"
+    read -n 1 -s -r -p "按任意键返回..."
+}
 
-echo -e "\e[33m>>> 4. 最暴力的权限赋予 (满足官方低权限账户要求)...\e[0m"
-chmod 777 /etc/hysteria/server.key
-chmod 777 /etc/hysteria/server.crt
-chown -R hysteria:hysteria /etc/hysteria/
-
-echo -e "\e[33m>>> 5. 强行拉起服务...\e[0m"
-systemctl daemon-reload
-systemctl enable hysteria-server.service >/dev/null 2>&1
-systemctl restart hysteria-server.service
-sleep 2
-
-# ==========================================
-# 生成节点信息与二维码
-# ==========================================
-IP=$(curl -4s ipv4.icanhazip.com)
-
-URI="hysteria2://MyStrongPassword123@$IP:45678/?insecure=1&sni=aws.amazon.com&obfs=salamander&obfs-password=MyObfsPassword123#Hy2-Pro"
-
-echo -e "\n\e[36m======================================================\e[0m"
-echo -e "\e[32m✅ Hysteria2 服务已重装并启动成功！\e[0m"
-echo -e "\e[36m======================================================\e[0m"
-echo -e "\e[32m$URI\e[0m"
-echo -e "\e[36m======================================================\e[0m"
-qrencode -t ANSIUTF8 "$URI"
+# --- UI 界面 ---
+while true; do
+    clear
+    echo "===================================================="
+    echo " 项目地址: https://github.com/yuan1228/hy2"
+    echo " 核心架构: H Y S T E R I A  2  P R O  [稳定版]"
+    echo "===================================================="
+    echo ""
+    echo " 1. 强力部署/重置 (官方内核)"
+    echo " 2. 查看节点链接"
+    echo " 3. 运行日志"
+    echo " 4. BBR加速"
+    echo " 5. 升级内核"
+    echo " 6. 深度卸载"
+    echo " 0. 退出"
+    echo ""
+    echo "===================================================="
+    read -p "指令 [0-6]: " choice
+    case $choice in
+        1) deploy_hy2 ;;
+        2) cat /etc/hysteria/share_link.txt 2>/dev/null || echo "无配置"; echo; read -n 1 -s -r -p "按任意键..." ;;
+        3) journalctl -u hysteria-server -f --output cat ;;
+        4) echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf; echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf; sysctl -p; read -n 1 -s -r -p "按任意键..." ;;
+        5) bash <(curl -fsSL https://get.hy2.sh/); systemctl restart hysteria-server.service ;;
+        6) rm -rf /etc/hysteria/ /usr/local/bin/hysteria; systemctl stop hysteria-server; echo "已卸载"; sleep 1 ;;
+        0) exit 0 ;;
+    esac
+done
