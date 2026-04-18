@@ -103,7 +103,7 @@ while true; do
     echo "===================================================="
     echo " 1. 一键安装 / 覆盖配置"
     echo " 2. 查看节点链接"
-    echo " 3. 安装原版BBR (FQ/CAKE)"
+    echo " 3. 安装原版BBR(FQ/CAKE)"
     echo " 4. 查看运行日志"
     echo " 5. 卸载"
     echo " 0. 退出"
