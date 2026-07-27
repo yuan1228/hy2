@@ -39,11 +39,10 @@ deploy_hy2() {
     mkdir -p /etc/hysteria
     
     echo -e "\e[36m[3/5] 正在生成自签名 TLS 证书 (SNI: $SNI)...\e[0m"
-    # 修复：兼容性更好的 OpenSSL EC 证书生成写法
     openssl ecparam -genkey -name prime256v1 -out /etc/hysteria/server.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$SNI" 2>/dev/null
     
-    echo -e "\e[36m[4/5] 正在写入配置文件...\e[0m"
+    echo -e "\e[36m[4/5] 正在写入配置文件并放行防火墙...\e[0m"
     OBFS_PASS=$(openssl rand -hex 6)
     cat <<EOF > /etc/hysteria/config.yaml
 listen: :$P
@@ -65,12 +64,15 @@ masquerade:
 ignoreClientBandwidth: true
 EOF
     
+    # 自动放行防火墙 UDP 端口
+    iptables -I INPUT -p udp --dport $P -j ACCEPT 2>/dev/null
+    ufw allow $P/udp 2>/dev/null
+    
     echo -e "\e[36m[5/5] 正在赋予权限并启动服务...\e[0m"
     chmod 644 /etc/hysteria/server.crt
     chmod 600 /etc/hysteria/server.key
     chown -R hysteria:hysteria /etc/hysteria/ 2>/dev/null || true
     
-    # 修复核心：加入 enable 设置开机自启
     systemctl enable hysteria-server.service
     systemctl restart hysteria-server.service
     
@@ -80,7 +82,7 @@ EOF
     URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI&obfs=salamander&obfs-password=$OBFS_PASS#${LOC}_HY2"
     echo "$URI" > /etc/hysteria/share_link.txt
     
-    echo -e "\n\e[32m部署完成！开机自启已设置，服务已就绪。\e[0m"
+    echo -e "\n\e[32m部署完成！开机自启已设置，UDP 端口已放行。\e[0m"
     echo -e "\e[33m节点链接：\e[0m $URI"
     read -n 1 -s -r -p "按任意键返回..."
 }
@@ -89,7 +91,6 @@ EOF
 set_bbr() {
     echo -e "\e[36m正在优化网络加速策略...\e[0m"
     
-    # 修复：先清理旧配置，防止文件无限重复追加
     sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
     sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
     
@@ -127,11 +128,12 @@ while true; do
         1) deploy_hy2 ;;
         2) cat /etc/hysteria/share_link.txt 2>/dev/null || echo "无配置"; echo; read -n 1 -s -r -p "按任意键..." ;;
         3) set_bbr ;;
-        4) journalctl -u hysteria-server -f --output cat ;;
+        4) journalctl -u hysteria-server -n 50 --no-pager --output cat; echo; read -n 1 -s -r -p "按任意键返回..." ;;
         5) 
             systemctl stop hysteria-server 2>/dev/null
             systemctl disable hysteria-server 2>/dev/null
-            rm -rf /etc/hysteria/ /usr/local/bin/hysteria /usr/local/bin/yuan
+            rm -rf /etc/hysteria/ /usr/bin/hysteria /usr/local/bin/hysteria /usr/local/bin/yuan /etc/systemd/system/hysteria-server.service
+            systemctl daemon-reload
             echo "已彻底卸载！"
             sleep 1 
             exit 0
