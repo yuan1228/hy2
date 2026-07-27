@@ -22,6 +22,9 @@ fi
 
 # --- 部署函数 ---
 deploy_hy2() {
+    # 自动补全基础依赖（防止纯净系统报错）
+    which curl openssl >/dev/null 2>&1 || (apt-get update && apt-get install -y curl openssl || yum install -y curl openssl)
+
     RAND_PORT=$((40000 + RANDOM % 10000))
     RAND_PASS=$(openssl rand -hex 8)
     
@@ -43,7 +46,7 @@ deploy_hy2() {
     openssl req -new -x509 -days 36500 -key /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$SNI" 2>/dev/null
     
     echo -e "\e[36m[4/5] 正在写入配置文件并放行防火墙...\e[0m"
-    OBFS_PASS=$(openssl rand -hex 6)
+    # 已移除 obfs 混淆，保持与 3X-UI 一致的原生纯净配置，完美兼容 OpenClash
     cat <<EOF > /etc/hysteria/config.yaml
 listen: :$P
 tls:
@@ -52,20 +55,12 @@ tls:
 auth:
   type: password
   password: $PASS
-obfs:
-  type: salamander
-  salamander:
-    password: $OBFS_PASS
-masquerade:
-  type: proxy
-  proxy:
-    url: https://$SNI
-    rewriteHost: true
 ignoreClientBandwidth: true
 EOF
     
-    # 自动放行防火墙 UDP 端口
+    # 自动放行 UDP 端口并持久化保存（防止重启系统后防火墙重置）
     iptables -I INPUT -p udp --dport $P -j ACCEPT 2>/dev/null
+    iptables-save > /etc/iptables/rules.v4 2>/dev/null || service iptables save 2>/dev/null || true
     ufw allow $P/udp 2>/dev/null
     
     echo -e "\e[36m[5/5] 正在赋予权限并启动服务...\e[0m"
@@ -73,16 +68,19 @@ EOF
     chmod 600 /etc/hysteria/server.key
     chown -R hysteria:hysteria /etc/hysteria/ 2>/dev/null || true
     
+    # 开启开机自启
     systemctl enable hysteria-server.service
     systemctl restart hysteria-server.service
     
     IP=$(curl -4s ipv4.icanhazip.com || curl -4s ip.sb)
     LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
     [ -z "$LOC" ] && LOC="VPS"
-    URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI&obfs=salamander&obfs-password=$OBFS_PASS#${LOC}_HY2"
+    
+    # 生成标准无混淆链接
+    URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI#${LOC}_HY2"
     echo "$URI" > /etc/hysteria/share_link.txt
     
-    echo -e "\n\e[32m部署完成！开机自启已设置，UDP 端口已放行。\e[0m"
+    echo -e "\n\e[32m部署完成！兼容 OpenClash 标准版已就绪，开机自启已生效。\e[0m"
     echo -e "\e[33m节点链接：\e[0m $URI"
     read -n 1 -s -r -p "按任意键返回..."
 }
