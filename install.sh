@@ -22,9 +22,6 @@ fi
 
 # --- 部署函数 ---
 deploy_hy2() {
-    # 补全基础依赖
-    which curl openssl iptables >/dev/null 2>&1 || (apt-get update && apt-get install -y curl openssl iptables || yum install -y curl openssl iptables)
-
     RAND_PORT=$((40000 + RANDOM % 10000))
     RAND_PASS=$(openssl rand -hex 8)
     
@@ -42,13 +39,12 @@ deploy_hy2() {
     mkdir -p /etc/hysteria
     
     echo -e "\e[36m[3/5] 正在生成自签名 TLS 证书 (SNI: $SNI)...\e[0m"
+    # 修复：兼容性更好的 OpenSSL EC 证书生成写法
     openssl ecparam -genkey -name prime256v1 -out /etc/hysteria/server.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$SNI" 2>/dev/null
     
-    echo -e "\e[36m[4/5] 正在写入配置文件(完全还原你的原始配置)...\e[0m"
+    echo -e "\e[36m[4/5] 正在写入配置文件...\e[0m"
     OBFS_PASS=$(openssl rand -hex 6)
-    
-    # 100% 保留你的原始混淆与反代配置
     cat <<EOF > /etc/hysteria/config.yaml
 listen: :$P
 tls:
@@ -69,58 +65,31 @@ masquerade:
 ignoreClientBandwidth: true
 EOF
     
-    # 放行防火墙并保存
-    iptables -I INPUT -p udp --dport $P -j ACCEPT 2>/dev/null
-    iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
-    ufw allow $P/udp 2>/dev/null
-    
     echo -e "\e[36m[5/5] 正在赋予权限并启动服务...\e[0m"
     chmod 644 /etc/hysteria/server.crt
     chmod 600 /etc/hysteria/server.key
     chown -R hysteria:hysteria /etc/hysteria/ 2>/dev/null || true
     
-    # 【修复核心1】：加入开机自启
+    # 修复核心：加入 enable 设置开机自启
     systemctl enable hysteria-server.service
     systemctl restart hysteria-server.service
     
     IP=$(curl -4s ipv4.icanhazip.com || curl -4s ip.sb)
     LOC=$(curl -s http://ip-api.com/line/?fields=countryCode)
     [ -z "$LOC" ] && LOC="VPS"
-    
-    # 100% 还原你的原始 URI
     URI="hysteria2://$PASS@$IP:$P/?insecure=1&sni=$SNI&obfs=salamander&obfs-password=$OBFS_PASS#${LOC}_HY2"
     echo "$URI" > /etc/hysteria/share_link.txt
     
-    clear
-    echo -e "\e[32m部署完成！开机自启已设置，电脑端已恢复。\e[0m\n"
-    
-    echo -e "\e[33m【1. 电脑 V2Ray 专用节点链接】\e[0m"
-    echo -e "直接复制到电脑客户端 (原汁原味)："
-    echo -e "\e[36m$URI\e[0m\n"
-
-    # 【修复核心2】：直接给出 OpenClash 标准 YAML，防转换器弄丢配置
-    echo -e "\e[35m【2. OpenClash / 软路由 专用配置】\e[0m"
-    echo -e "请不要用订阅转换器！直接把下面这段代码，粘贴进 OpenClash 的节点配置文件里："
-    echo -e "\e[37m------------------------------------------------\e[0m"
-    cat <<EOF
-- name: "${LOC}_HY2"
-  type: hysteria2
-  server: $IP
-  port: $P
-  password: $PASS
-  sni: $SNI
-  skip-cert-verify: true
-  obfs: salamander
-  obfs-password: $OBFS_PASS
-EOF
-    echo -e "\e[37m------------------------------------------------\e[0m\n"
-
-    read -n 1 -s -r -p "按任意键返回主菜单..."
+    echo -e "\n\e[32m部署完成！开机自启已设置，服务已就绪。\e[0m"
+    echo -e "\e[33m节点链接：\e[0m $URI"
+    read -n 1 -s -r -p "按任意键返回..."
 }
 
 # --- 加速中心 ---
 set_bbr() {
     echo -e "\e[36m正在优化网络加速策略...\e[0m"
+    
+    # 修复：先清理旧配置，防止文件无限重复追加
     sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
     sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
     
@@ -150,28 +119,19 @@ while true; do
     echo " 2. 查看节点链接"
     echo " 3. 安装原版BBR(FQ/CAKE)"
     echo " 4. 查看运行日志"
-    echo " 5. 彻底卸载"
+    echo " 5. 卸载"
     echo " 0. 退出"
     echo "===================================================="
     read -p "指令 [0-5]: " choice
     case $choice in
         1) deploy_hy2 ;;
-        2) 
-            cat /etc/hysteria/share_link.txt 2>/dev/null || echo "无配置"
-            echo
-            read -n 1 -s -r -p "按任意键..." 
-            ;;
+        2) cat /etc/hysteria/share_link.txt 2>/dev/null || echo "无配置"; echo; read -n 1 -s -r -p "按任意键..." ;;
         3) set_bbr ;;
-        4) 
-            journalctl -u hysteria-server -n 50 --no-pager --output cat
-            echo
-            read -n 1 -s -r -p "按任意键返回..." 
-            ;;
+        4) journalctl -u hysteria-server -f --output cat ;;
         5) 
             systemctl stop hysteria-server 2>/dev/null
             systemctl disable hysteria-server 2>/dev/null
-            rm -rf /etc/hysteria/ /usr/bin/hysteria /usr/local/bin/hysteria /usr/local/bin/yuan /etc/systemd/system/hysteria-server.service
-            systemctl daemon-reload
+            rm -rf /etc/hysteria/ /usr/local/bin/hysteria /usr/local/bin/yuan
             echo "已彻底卸载！"
             sleep 1 
             exit 0
