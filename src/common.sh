@@ -217,6 +217,17 @@ svc_restart() {
 }
 
 # ---------------- 杂项 ----------------
+# 取 GitHub 仓库最新 release 的 tag（如 v26.3.27），输出 tag，失败返回非零
+# 注意：必须用 grep -o 只取 "tag_name":"..." 片段，不能按整行 cut；
+# 某些网络下 API 返回的是压缩成单行的 JSON，按整行 cut 会错取成 url 字段
+github_latest_tag() {
+    local repo="$1" tag
+    tag="$(curl -fsSL --max-time 20 "https://api.github.com/repos/${repo}/releases/latest" \
+        | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)"
+    [[ "$tag" =~ ^v?[0-9] ]] || return 1
+    printf '%s' "$tag"
+}
+
 # 国家代码（用于链接备注）
 geo_cc() {
     curl -s --max-time 8 "http://ip-api.com/line/?fields=countryCode" 2>/dev/null \

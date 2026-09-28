@@ -1,5 +1,15 @@
 # 更新日志
 
+## v3.1.1 (2026-09-29)
+
+- **修严重 bug**：GitHub API 版本号解析在某些网络下会拿到错误值。某些网络
+  （代理/CDN）返回的 release JSON 是压缩成单行的，旧写法按整行 `cut` 会把
+  `url` 字段（`https://api.github.com/.../releases/302486999`）当成版本号，
+  导致 Xray 下载 404、部署在 [1/5] 直接失败。改为 `grep -o` 只取
+  `"tag_name":"..."` 片段（兼容单行/多行 JSON），并加版本号格式校验，
+  解析失败时直接报错而不是去下载垃圾 URL。影响 `_xray.sh` 与 `shadowsocks.sh`；
+  顺带消除了 `curl: (23)` 的虚惊报错（`grep -m1` 提前关管道导致的）
+
 ## v3.1.0 (2026-09-28)
 
 - **网络测试换装**：TcpQuality（TCP 三网质量检测）+ NodeQuality（综合体检：

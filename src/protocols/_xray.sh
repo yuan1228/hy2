@@ -22,9 +22,8 @@ xray_ensure() {
     ensure_cmd unzip unzip
 
     step "获取 Xray 最新版本…"
-    ver="$(curl -fsSL --max-time 20 https://api.github.com/repos/XTLS/Xray-core/releases/latest \
-        | grep -m1 '"tag_name"' | cut -d'"' -f4)"
-    [[ -z "$ver" ]] && { err "无法获取 Xray 版本（网络或 GitHub API 异常）"; return 1; }
+    ver="$(github_latest_tag "XTLS/Xray-core")" \
+        || { err "无法获取 Xray 版本（网络或 GitHub API 异常）"; return 1; }
 
     if [[ -x "$XRAY_BIN" && "$(cat "$XRAY_VER_FILE" 2>/dev/null)" == "$ver" ]]; then
         dim "Xray 已是最新 ($ver)，跳过下载"

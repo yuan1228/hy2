@@ -35,9 +35,8 @@ ss_ensure_bin() {
     ensure_cmd tar tar
 
     step "获取 shadowsocks-rust 最新版本…"
-    ver="$(curl -fsSL --max-time 20 https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases/latest \
-        | grep -m1 '"tag_name"' | cut -d'"' -f4)"
-    [[ -z "$ver" ]] && { err "无法获取版本（网络或 GitHub API 异常）"; return 1; }
+    ver="$(github_latest_tag "shadowsocks/shadowsocks-rust")" \
+        || { err "无法获取版本（网络或 GitHub API 异常）"; return 1; }
 
     if [[ -x "$SS_BIN" && "$(cat "$SS_VER_FILE" 2>/dev/null)" == "$ver" ]]; then
         dim "ssserver 已是最新 ($ver)，跳过下载"
