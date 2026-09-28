@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
-# Yuan Panel · 安装引导
-# 一键安装 / 更新面板本体，创建 `yuan` 快捷命令
+# Yuan VPS 工具箱 · 安装引导
+# 一键安装 / 更新工具箱本体，创建 `yuan` 快捷命令
 #
 #   bash <(curl -sL https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh)
 # ============================================================
@@ -20,7 +20,7 @@ c_err()  { echo -e "\e[31m$*\e[0m"; }
 [[ "$EUID" -eq 0 ]] || { c_err "请使用 root 用户运行"; exit 1; }
 command -v curl >/dev/null 2>&1 || { c_err "缺少 curl，请先安装"; exit 1; }
 
-c_info "▸ 正在安装 Yuan Panel…"
+c_info "▸ 正在安装 Yuan VPS 工具箱…"
 
 # 安装 git（用于增量更新）；失败则走 tarball 兜底
 if ! command -v git >/dev/null 2>&1; then

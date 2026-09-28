@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Yuan Panel · 系统模块：网络调优（BBR / 内核参数）
+# Yuan VPS 工具箱 · 系统模块：网络调优（BBR / 内核参数）
 # ============================================================
 
 tuning_menu() {
@@ -82,7 +82,7 @@ tuning_reset() {
 tuning_general() {
     local conf="/etc/sysctl.d/99-yuan-tuning.conf"
     cat > "$conf" <<'EOF'
-# Yuan Panel 通用网络优化
+# Yuan VPS 工具箱 通用网络优化
 net.core.rmem_max = 67108864
 net.core.wmem_max = 67108864
 net.core.netdev_max_backlog = 250000

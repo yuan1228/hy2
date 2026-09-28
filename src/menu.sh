@@ -1,13 +1,12 @@
 #!/bin/bash
 # ============================================================
-# Yuan Panel · 主菜单
-# 顶部状态仪表盘 + 协议子菜单 + 系统工具
+# Yuan VPS 工具箱 · 主菜单
+# 风格参考 eooce/ssh_tool：VPS 常用工具合集，不含建站
 # ============================================================
 
-# 协议注册表：id 顺序即菜单顺序
+# 协议注册表（节点搭建区）
 PROTOS=(hy2 vless trojan ss)
 
-# id -> 显示名 / 模块文件
 proto_name() {
     case "$1" in
         hy2)    echo "Hysteria2" ;;
@@ -23,9 +22,15 @@ load_modules() {
     source "$YUAN_ROOT/src/protocols/vless.sh"
     source "$YUAN_ROOT/src/protocols/trojan.sh"
     source "$YUAN_ROOT/src/protocols/shadowsocks.sh"
+    source "$YUAN_ROOT/src/system/info.sh"
+    source "$YUAN_ROOT/src/system/maintenance.sh"
     source "$YUAN_ROOT/src/system/tuning.sh"
     source "$YUAN_ROOT/src/system/firewall.sh"
     source "$YUAN_ROOT/src/system/security.sh"
+    source "$YUAN_ROOT/src/system/pkgs.sh"
+    source "$YUAN_ROOT/src/net/warp.sh"
+    source "$YUAN_ROOT/src/net/tcpquality.sh"
+    source "$YUAN_ROOT/src/net/nodequality.sh"
     source "$YUAN_ROOT/src/update.sh"
 }
 
@@ -57,14 +62,54 @@ draw_header() {
     sysinfo
     clear
     echo -e "${C_BLD}============================================================${C_RST}"
-    echo -e "  ${C_CYN}${C_BLD}Yuan Panel${C_RST} ${C_DIM}v$YUAN_VERSION · 多协议节点管理${C_RST}"
-    echo -e "  ${C_DIM}$SYS_OS $SYS_VER · $SYS_ARCH · 虚拟化 $SYS_VIRT${C_RST}"
+    echo -e "  ${C_CYN}${C_BLD}Yuan VPS 工具箱${C_RST} ${C_DIM}v$YUAN_VERSION${C_RST}"
+    echo -e "  ${C_DIM}$SYS_OS $SYS_VER · $SYS_ARCH · $SYS_VIRT${C_RST}"
     echo -e "${C_BLD}------------------------------------------------------------${C_RST}"
     local id
     for id in "${PROTOS[@]}"; do
         printf "  %b %-14s %b\n" "$(proto_dot "$id")" "$(proto_name "$id")" "$(proto_state_text "$id")"
     done
     echo -e "${C_BLD}============================================================${C_RST}"
+}
+
+draw_menu() {
+    echo
+    echo -e " ${C_BLD}节点搭建${C_RST}"
+    echo -e " ${C_GRN} 1. Hysteria2 管理         2. VLESS+REALITY 管理${C_RST}"
+    echo -e " ${C_GRN} 3. Trojan 管理            4. Shadowsocks 管理${C_RST}"
+    echo -e " ${C_GRN} 5. WARP 管理${C_RST}"
+    echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
+    echo -e " ${C_BLD}系统工具${C_RST}"
+    echo -e " ${C_GRN} 6. 本机信息               7. 系统更新${C_RST}"
+    echo -e " ${C_GRN} 8. 系统清理               9. BBR / 网络调优${C_RST}"
+    echo -e " ${C_GRN}10. 防火墙管理            11. 安全检查${C_RST}"
+    echo -e " ${C_GRN}12. 常用组件安装          13. 全部节点链接${C_RST}"
+    echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
+    echo -e " ${C_BLD}网络测试${C_RST} ${C_DIM}(每次运行前自动检查上游更新)${C_RST}"
+    echo -e " ${C_GRN}14. TcpQuality${C_RST} ${C_DIM}TCP 三网质量检测${C_RST}"
+    echo -e " ${C_GRN}15. NodeQuality${C_RST} ${C_DIM}综合体检：性能+IP质量+网络质量${C_RST}"
+    echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
+    echo -e " ${C_YLW}00. 检查更新${C_RST}              ${C_RED}88. 退出${C_RST}"
+    echo -e "${C_BLD}============================================================${C_RST}"
+    echo
+}
+
+# 部署方式选择：一键（全默认）或自定义（逐项确认）
+proto_deploy() {
+    local id="$1"
+    echo
+    echo "  1. 一键部署（端口/密码/SNI 全用默认值）"
+    echo "  2. 自定义部署（逐项设置）"
+    echo "  0. 返回"
+    echo
+    local c
+    read -r -p "请选择 [0-2]: " c < /dev/tty
+    case "$c" in
+        1) QUICK=1 "${id}_deploy"; QUICK=0 ;;
+        2) "${id}_deploy" ;;
+        0) return 0 ;;
+        *) warn "无效选项"; sleep 1 ;;
+    esac
 }
 
 proto_menu() {
@@ -87,7 +132,7 @@ proto_menu() {
         local c
         read -r -p "请选择 [0-6]: " c < /dev/tty
         case "$c" in
-            1) "${id}_deploy" ;;
+            1) proto_deploy "$id" ;;
             2) "${id}_link" ;;
             3) "${id}_status" ;;
             4) "${id}_restart" ;;
@@ -107,7 +152,6 @@ show_all_links() {
     for id in "${PROTOS[@]}"; do
         link=""
         [[ -f "$YUAN_CONF/$id/link.txt" ]] && link="$(cat "$YUAN_CONF/$id/link.txt")"
-        # 兼容 v1 hysteria 旧路径
         [[ -z "$link" && "$id" == "hy2" && -f /etc/hysteria/share_link.txt ]] \
             && link="$(cat /etc/hysteria/share_link.txt)"
         if [[ -n "$link" ]]; then
@@ -123,34 +167,26 @@ show_all_links() {
 
 main_menu() {
     load_modules
-    local c id i
+    local c
     while true; do
         draw_header
-        echo
-        echo "  协议管理："
-        i=1
-        for id in "${PROTOS[@]}"; do
-            printf "   %d. %s\n" "$i" "$(proto_name "$id")"
-            i=$((i+1))
-        done
-        echo
-        echo "  系统工具："
-        echo "   5. 网络调优 (BBR)"
-        echo "   6. 防火墙管理"
-        echo "   7. 安全检查"
-        echo "   8. 查看全部节点链接"
-        echo "   9. 检查更新"
-        echo "   0. 退出"
-        echo
-        read -r -p "请选择 [0-9]: " c < /dev/tty
+        draw_menu
+        read -r -p "请输入你的选择: " c < /dev/tty
         case "$c" in
             1|2|3|4) proto_menu "${PROTOS[$((c-1))]}" ;;
-            5) tuning_menu ;;
-            6) fw_menu ;;
-            7) sec_run ;;
-            8) show_all_links ;;
-            9) update_panel ;;
-            0) echo "再见！"; exit 0 ;;
+            5)  warp_menu ;;
+            6)  sys_info ;;
+            7)  sys_update ;;
+            8)  sys_clean ;;
+            9)  tuning_menu ;;
+            10) fw_menu ;;
+            11) sec_run ;;
+            12) pkgs_menu ;;
+            13) show_all_links ;;
+            14) net_tcpquality ;;
+            15) net_nodequality ;;
+            00) update_panel ;;
+            88) echo "再见！"; exit 0 ;;
             *) warn "无效选项"; sleep 1 ;;
         esac
     done

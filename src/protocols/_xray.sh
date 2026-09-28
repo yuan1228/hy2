@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Yuan Panel · Xray 共享助手（内部使用，供 vless/trojan 模块引用）
+# Yuan VPS 工具箱 · Xray 共享助手（内部使用，供 vless/trojan 模块引用）
 # ============================================================
 
 XRAY_BIN="$YUAN_BIN_DIR/xray"
@@ -84,7 +84,7 @@ xray_deploy_service() {
         || { err "Xray 配置校验未通过"; return 1; }
     cat > "/etc/systemd/system/${svc}.service" <<EOF
 [Unit]
-Description=Yuan Panel Xray ($svc)
+Description=Yuan VPS 工具箱 Xray ($svc)
 After=network.target nss-lookup.target
 
 [Service]

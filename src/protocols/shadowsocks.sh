@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Yuan Panel · 协议模块：Shadowsocks (2022)
+# Yuan VPS 工具箱 · 协议模块：Shadowsocks (2022)
 # shadowsocks-rust，轻量快速，适合做备用/兜底协议
 # ============================================================
 
@@ -105,7 +105,7 @@ EOF
     step "[3/4] 启动服务并设置开机自启…"
     cat > "/etc/systemd/system/${SS_SVC}.service" <<EOF
 [Unit]
-Description=Yuan Panel Shadowsocks
+Description=Yuan VPS 工具箱 Shadowsocks
 After=network.target nss-lookup.target
 
 [Service]
