@@ -1,5 +1,14 @@
 # 更新日志
 
+## v3.1.2 (2026-09-29)
+
+- **修严重 bug**：VLESS/Trojan 部署后服务永远起不来。`VLESS_SVC` 本来就是
+  `yuan-vless.service`（带后缀），而 `_xray.sh` 写 unit 文件时又拼了一次
+  `.service`，实际写成了 `/etc/systemd/system/yuan-vless.service.service`，
+  `systemctl restart yuan-vless.service` 找不到 unit 而失败，且 journalctl
+  毫无日志。改为直接用传入的完整 unit 名；卸载路径同步修正；
+  部署时自动清理旧版本遗留的 `.service.service` 错文件
+
 ## v3.1.1 (2026-09-29)
 
 - **修严重 bug**：GitHub API 版本号解析在某些网络下会拿到错误值。某些网络

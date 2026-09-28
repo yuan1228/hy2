@@ -133,7 +133,7 @@ trojan_uninstall() {
     confirm "确定彻底卸载 Trojan 吗？配置与证书将全部删除" || return 0
     systemctl stop "$TROJAN_SVC" 2>/dev/null
     systemctl disable "$TROJAN_SVC" 2>/dev/null
-    rm -f "/etc/systemd/system/${TROJAN_SVC}.service"
+    rm -f "/etc/systemd/system/${TROJAN_SVC}"
     systemctl daemon-reload 2>/dev/null
     rm -rf "$TROJAN_DIR"
     ok "Trojan 已彻底卸载"

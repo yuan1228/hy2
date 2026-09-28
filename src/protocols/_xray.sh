@@ -81,7 +81,9 @@ xray_deploy_service() {
     local svc="$1" conf="$2"
     "$XRAY_BIN" -test -config "$conf" >/dev/null 2>&1 \
         || { err "Xray 配置校验未通过"; return 1; }
-    cat > "/etc/systemd/system/${svc}.service" <<EOF
+    # 兼容清理：v3.1.x 曾误写成 ${svc}.service（如 yuan-vless.service.service）
+    rm -f "/etc/systemd/system/${svc}.service"
+    cat > "/etc/systemd/system/${svc}" <<EOF
 [Unit]
 Description=Yuan VPS 工具箱 Xray ($svc)
 After=network.target nss-lookup.target

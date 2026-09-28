@@ -145,7 +145,7 @@ vless_uninstall() {
     confirm "确定彻底卸载 VLESS + REALITY 吗？配置与密钥将全部删除" || return 0
     systemctl stop "$VLESS_SVC" 2>/dev/null
     systemctl disable "$VLESS_SVC" 2>/dev/null
-    rm -f "/etc/systemd/system/${VLESS_SVC}.service"
+    rm -f "/etc/systemd/system/${VLESS_SVC}"
     systemctl daemon-reload 2>/dev/null
     rm -rf "$VLESS_DIR"
     ok "VLESS + REALITY 已彻底卸载"
