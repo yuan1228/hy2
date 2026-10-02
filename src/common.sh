@@ -268,7 +268,13 @@ svc_restart() {
             ;;
         openrc)
             rc-update add "$name" default 2>/dev/null
-            rc-service "$name" restart 2>/dev/null || return 1
+            # 先停后起比 restart 更稳：restart 在服务从未启动过时行为不一致；
+            # 启动失败时保留报错输出，方便排查（不再 2>/dev/null 吃掉）
+            rc-service "$name" stop >/dev/null 2>&1
+            if ! rc-service "$name" start; then
+                err "服务 $name 启动失败"
+                return 1
+            fi
             ;;
         *) return 1 ;;
     esac
@@ -325,7 +331,11 @@ output_log="$logfile"
 error_log="$logfile"
 
 depend() {
-    need net
+    # 注意：不要用 "need net" —— Alpine VPS 上通常没有配置 net.* 服务，
+    # 硬依赖会导致 OpenRC 直接拒绝启动。用 use/after 做软依赖最稳。
+    need localmount
+    use net dns
+    after firewall
 }
 EOF
             chmod +x "/etc/init.d/${name}"

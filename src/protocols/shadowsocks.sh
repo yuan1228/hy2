@@ -25,9 +25,12 @@ ss_port() {
 ss_ensure_bin() {
     sysinfo
     local arch_dl ver url tmpdir
+    # Alpine 用 musl，glibc 构建在其上无法运行，必须选 -musl 包
+    local libc_suffix=""
+    [[ "$SYS_OS" == "alpine" ]] && libc_suffix="-musl"
     case "$SYS_ARCH" in
-        amd64) arch_dl="x86_64-unknown-linux-gnu" ;;
-        arm64) arch_dl="aarch64-unknown-linux-gnu" ;;
+        amd64) arch_dl="x86_64-unknown-linux-gnu${libc_suffix}" ;;
+        arm64) arch_dl="aarch64-unknown-linux-gnu${libc_suffix}" ;;
         *) err "Shadowsocks 不支持该架构：$SYS_ARCH"; return 1 ;;
     esac
 
@@ -39,8 +42,11 @@ ss_ensure_bin() {
         || { err "无法获取版本（网络或 GitHub API 异常）"; return 1; }
 
     if [[ -x "$SS_BIN" && "$(cat "$SS_VER_FILE" 2>/dev/null)" == "$ver" ]]; then
-        dim "ssserver 已是最新 ($ver)，跳过下载"
-        return 0
+        if "$SS_BIN" --version >/dev/null 2>&1; then
+            dim "ssserver 已是最新 ($ver)，跳过下载"
+            return 0
+        fi
+        warn "已存在的 ssserver 二进制已损坏，重新下载…"
     fi
 
     step "下载 ssserver $ver…"

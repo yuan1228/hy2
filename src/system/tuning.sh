@@ -36,6 +36,9 @@ tuning_check_env() {
         warn "检测到容器虚拟化（$SYS_VIRT），通常无权修改内核参数，配置可能不生效"
         confirm "仍要继续吗？" || return 1
     fi
+    # Debian/Ubuntu 上 bbr 是 tcp_bbr 内核模块，默认未加载；
+    # tcp_available_congestion_control 只列出已加载的算法，不先 modprobe 会误判为不支持
+    modprobe tcp_bbr 2>/dev/null
     if ! sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -qw bbr; then
         err "当前内核不支持 BBR"
         echo; pause; return 1

@@ -41,7 +41,15 @@ hy2_load_old() {
 # 改为从 GitHub releases 直接下载二进制（行为等价，且避开官方脚本的 grep -P 等兼容问题）
 hy2_ensure_bin() {
     detect_init
-    [[ -x "$HY2_BIN" ]] && { dim "hysteria 已安装，跳过下载"; return 0; }
+    # 光存在不够：必须能执行（上次下载中断的半截文件也要重下）
+    if [[ -x "$HY2_BIN" ]]; then
+        if "$HY2_BIN" version >/dev/null 2>&1; then
+            dim "hysteria 已安装，跳过下载"
+            return 0
+        fi
+        warn "已存在的 hysteria 二进制已损坏，重新下载…"
+        rm -f "$HY2_BIN"
+    fi
     ensure_cmd curl curl
     if [[ "$SYS_INIT" == "systemd" ]]; then
         if ! bash <(curl -fsSL --max-time 60 https://get.hy2.sh/); then
@@ -63,7 +71,10 @@ hy2_ensure_bin() {
         fi
         chmod +x "$HY2_BIN"
     fi
-    [[ -x "$HY2_BIN" ]] || { err "未找到 hysteria 可执行文件"; return 1; }
+    if [[ ! -x "$HY2_BIN" ]] || ! "$HY2_BIN" version >/dev/null 2>&1; then
+        err "hysteria 二进制校验失败（文件损坏或架构不匹配）"
+        return 1
+    fi
     ok "hysteria 安装完成"
 }
 

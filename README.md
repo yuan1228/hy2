@@ -13,6 +13,11 @@ bash <(curl -sL https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/i
 
 安装完成后，随时输入 `yuan` 进入工具箱。
 
+> **Alpine Linux 用户注意**：纯净 Alpine 默认没有 bash，请先执行：
+> ```sh
+> apk add --no-cache bash curl && bash <(curl -sL https://raw.githubusercontent.com/yuan1228/hy2/refs/heads/main/install.sh)
+> ```
+
 ## 菜单一览
 
 ```

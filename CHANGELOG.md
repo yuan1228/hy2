@@ -1,5 +1,30 @@
 # 更新日志
 
+## v3.2.0 (2026-10-02)
+
+**Alpine 实战修复**（瑞典 Alpine 服务器上 hy2 超时的根因）：
+
+- **修致命 bug**：OpenRC 服务脚本的 `depend() { need net; }` 在 Alpine VPS 上
+  因没有 `net` 服务导致 OpenRC 直接拒绝启动，节点超时。改为
+  `need localmount` + `use net` 软依赖，任何 Alpine 环境都能起
+- **修 bug**：`svc_restart` 在 OpenRC 下改用 stop→start（restart 语义不一致），
+  启动失败时显示真实报错，不再 `2>/dev/null` 吃掉
+- **修 bug**：`hy2_ensure_bin` 只判文件存在不判能否执行，下载中断的半截
+  二进制会被跳过导致起不来；现在校验 `hysteria version` 能跑才算安装成功
+- **修 bug**：shadowsocks-rust 在 Alpine 上必须用 `-musl` 构建，glibc 版
+  在 musl 系统上无法执行；已按系统自动选择
+- **恢复 v3.1.3 的 BBR 修复**：`modprobe tcp_bbr` 被误删已补回，
+  Debian/Ubuntu 上 BBR 检测不再误判
+- Xray / ssserver 同样加上二进制可执行校验
+- README 补充 Alpine 专用一键命令（纯净 Alpine 无 bash，需先 `apk add bash curl`）
+
+## v3.1.3 (2026-09-29)
+
+- **修 BBR 误判**：Debian/Ubuntu 上 BBR 是 `tcp_bbr` 内核模块，默认未加载；
+  而 `tcp_available_congestion_control` 只列出已加载的算法，导致脚本在
+  6.1 内核上也报错"当前内核不支持 BBR"。检测前先 `modprobe tcp_bbr`，
+  仍加载失败才报不支持
+
 ## v3.1.2 (2026-09-29)
 
 - **修严重 bug**：VLESS/Trojan 部署后服务永远起不来。`VLESS_SVC` 本来就是

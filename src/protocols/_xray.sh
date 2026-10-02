@@ -26,8 +26,11 @@ xray_ensure() {
         || { err "无法获取 Xray 版本（网络或 GitHub API 异常）"; return 1; }
 
     if [[ -x "$XRAY_BIN" && "$(cat "$XRAY_VER_FILE" 2>/dev/null)" == "$ver" ]]; then
-        dim "Xray 已是最新 ($ver)，跳过下载"
-        return 0
+        if "$XRAY_BIN" version >/dev/null 2>&1; then
+            dim "Xray 已是最新 ($ver)，跳过下载"
+            return 0
+        fi
+        warn "已存在的 Xray 二进制已损坏，重新下载…"
     fi
 
     step "下载 Xray $ver ($arch_dl)…"
