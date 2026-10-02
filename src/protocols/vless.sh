@@ -136,17 +136,16 @@ vless_restart() {
 vless_logs() {
     info "最近 60 行日志（下方实时跟踪，Ctrl+C 停止）"
     echo
-    journalctl -u "$VLESS_SVC" -n 60 --no-pager
+    svc_logs "$VLESS_SVC" 60
     echo
-    journalctl -u "$VLESS_SVC" -f --output cat
+    svc_logs_follow "$VLESS_SVC"
 }
 
 vless_uninstall() {
     confirm "确定彻底卸载 VLESS + REALITY 吗？配置与密钥将全部删除" || return 0
-    systemctl stop "$VLESS_SVC" 2>/dev/null
-    systemctl disable "$VLESS_SVC" 2>/dev/null
-    rm -f "/etc/systemd/system/${VLESS_SVC}"
-    systemctl daemon-reload 2>/dev/null
+    step "停止并移除服务…"
+    svc_uninstall "$VLESS_SVC"
+    step "删除配置…"
     rm -rf "$VLESS_DIR"
     ok "VLESS + REALITY 已彻底卸载"
     echo; pause

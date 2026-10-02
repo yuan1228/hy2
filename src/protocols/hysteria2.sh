@@ -36,12 +36,45 @@ hy2_load_old() {
     HY2_OLD_OBFS="$(urldecode "$HY2_OLD_OBFS")"
 }
 
+# 安装 hysteria 二进制
+# systemd 系统：走官方安装脚本；Alpine/OpenRC：官方脚本强制要求 systemd，
+# 改为从 GitHub releases 直接下载二进制（行为等价，且避开官方脚本的 grep -P 等兼容问题）
+hy2_ensure_bin() {
+    detect_init
+    [[ -x "$HY2_BIN" ]] && { dim "hysteria 已安装，跳过下载"; return 0; }
+    ensure_cmd curl curl
+    if [[ "$SYS_INIT" == "systemd" ]]; then
+        if ! bash <(curl -fsSL --max-time 60 https://get.hy2.sh/); then
+            err "官方安装脚本执行失败，请检查网络后重试"
+            return 1
+        fi
+    else
+        local arch url
+        case "$(uname -m)" in
+            x86_64)  arch="amd64" ;;
+            aarch64) arch="arm64" ;;
+            *) err "Hysteria2 不支持该架构：$(uname -m)"; return 1 ;;
+        esac
+        step "下载 hysteria 二进制（Alpine 直接下载模式）…"
+        url="https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-${arch}"
+        if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$HY2_BIN"; then
+            err "hysteria 下载失败，请检查网络后重试"
+            return 1
+        fi
+        chmod +x "$HY2_BIN"
+    fi
+    [[ -x "$HY2_BIN" ]] || { err "未找到 hysteria 可执行文件"; return 1; }
+    ok "hysteria 安装完成"
+}
+
 hy2_deploy() {
     hy2_load_old
     local port pass sni obfs ip cc uri
 
     bold "—— 部署 Hysteria2 ——"
     echo
+    # openssl 必须在 gen_hex/gen_pass 调用前就绪（默认值求值时会用到）
+    ensure_cmd openssl openssl
     ask_port "监听 UDP 端口" "${HY2_OLD_PORT:-$((40000 + RANDOM % 10000))}" port
     ask_secret "认证密码" "${HY2_OLD_PASS:-$(gen_hex 16)}" pass
     ask_input "伪装域名 (SNI)" "${HY2_OLD_SNI:-www.cloudflare.com}" sni
@@ -49,18 +82,12 @@ hy2_deploy() {
     obfs="$HY2_OLD_OBFS"
 
     step "[1/6] 安装 Hysteria2 官方核心…"
-    ensure_cmd curl curl
-    if ! bash <(curl -fsSL --max-time 60 https://get.hy2.sh/); then
-        err "官方安装脚本执行失败，请检查网络后重试"
-        echo; pause; return 1
-    fi
-    [[ -x "$HY2_BIN" ]] || { err "未找到 hysteria 可执行文件"; echo; pause; return 1; }
+    hy2_ensure_bin || { echo; pause; return 1; }
 
     step "[2/6] 准备配置目录…"
     ensure_dir "$HY2_DIR"
 
     step "[3/6] 生成自签 TLS 证书 (CN=$sni)…"
-    ensure_cmd openssl openssl
     rm -f "$HY2_DIR/server.key" "$HY2_DIR/server.crt"
     openssl ecparam -genkey -name prime256v1 -out "$HY2_DIR/server.key" 2>/dev/null
     openssl req -new -x509 -days 36500 -key "$HY2_DIR/server.key" \
@@ -97,7 +124,10 @@ EOF
     chmod 600 "$HY2_DIR/config.yaml" "$HY2_DIR/server.key"
     chmod 644 "$HY2_DIR/server.crt"
 
-    step "[5/6] 启动服务并设置开机自启…"
+    step "[5/6] 安装服务并设置开机自启…"
+    svc_install "$HY2_SVC" "Yuan VPS 工具箱 Hysteria2" \
+        "$HY2_BIN" "server --config $HY2_DIR/config.yaml" \
+        || { err "服务安装失败"; echo; pause; return 1; }
     if ! svc_restart "$HY2_SVC"; then
         err "服务启动失败，请查看运行日志排查"
         echo; pause; return 1
@@ -148,19 +178,15 @@ hy2_restart() {
 hy2_logs() {
     info "最近 60 行日志（下方实时跟踪，Ctrl+C 停止）"
     echo
-    journalctl -u "$HY2_SVC" -n 60 --no-pager
+    svc_logs "$HY2_SVC" 60
     echo
-    journalctl -u "$HY2_SVC" -f --output cat
+    svc_logs_follow "$HY2_SVC"
 }
 
 hy2_uninstall() {
     confirm "确定彻底卸载 Hysteria2 吗？配置与证书将全部删除" || return 0
-    step "停止并禁用服务…"
-    systemctl stop "$HY2_SVC" 2>/dev/null
-    systemctl disable "$HY2_SVC" 2>/dev/null
-    rm -f /etc/systemd/system/hysteria-server.service
-    rm -rf /etc/systemd/system/hysteria-server.service.d
-    systemctl daemon-reload 2>/dev/null
+    step "停止并移除服务…"
+    svc_uninstall "$HY2_SVC"
     step "删除程序与配置…"
     rm -rf "$HY2_DIR" "$HY2_BIN" "$HY2_LEGACY_LINK"
     rmdir /etc/hysteria 2>/dev/null || true

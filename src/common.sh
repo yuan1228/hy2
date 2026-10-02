@@ -177,9 +177,22 @@ get_pubip() {
     return 1
 }
 
-# 端口是否被占用（TCP/UDP）
+# 列出当前监听端口（ss 不可用时回退到 netstat，供展示用）
+show_listening() {
+    if command -v ss >/dev/null 2>&1; then
+        ss -tuln 2>/dev/null | awk 'NR>1 {print "  " $1, $5}' | sort -u
+    else
+        netstat -tuln 2>/dev/null | awk 'NR>1 {print "  " $1, $4}' | sort -u
+    fi
+}
+
+# 端口是否被占用（TCP/UDP）；ss 不可用时（如 Alpine 精简版）回退到 netstat
 port_used() {
-    ss -tuln 2>/dev/null | grep -qE "[:.]$1([[:space:]]|$)"
+    if command -v ss >/dev/null 2>&1; then
+        ss -tuln 2>/dev/null | grep -qE "[:.]$1([[:space:]]|$)"
+    else
+        netstat -tuln 2>/dev/null | grep -qE "[:.]$1([[:space:]]|$)"
+    fi
 }
 
 # 校验端口合法性
@@ -203,17 +216,174 @@ ask_port() {
     printf -v "$var" '%s' "$val"
 }
 
-# ---------------- systemd ----------------
-svc_active()  { systemctl is-active --quiet "$1" 2>/dev/null; }
-svc_enabled() { systemctl is-enabled --quiet "$1" 2>/dev/null; }
+# ---------------- init 系统抽象（systemd / OpenRC） ----------------
+# SYS_INIT: systemd | openrc | unknown（首次调用 detect_init 时确定并缓存）
+SYS_INIT=""
+
+detect_init() {
+    [[ -n "$SYS_INIT" ]] && return 0
+    if [[ -d /run/systemd/system ]]; then
+        SYS_INIT="systemd"
+    elif command -v rc-service >/dev/null 2>&1; then
+        SYS_INIT="openrc"
+    else
+        SYS_INIT="unknown"
+    fi
+}
+
+# 服务名标准化：去掉 .service 后缀（OpenRC 服务名不带后缀）
+svc_name() { printf '%s' "${1%.service}"; }
+
+svc_active() {
+    detect_init
+    local name
+    name="$(svc_name "$1")"
+    case "$SYS_INIT" in
+        systemd) systemctl is-active --quiet "$1" 2>/dev/null ;;
+        openrc)  rc-service "$name" status >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
+
+svc_enabled() {
+    detect_init
+    local name
+    name="$(svc_name "$1")"
+    case "$SYS_INIT" in
+        systemd) systemctl is-enabled --quiet "$1" 2>/dev/null ;;
+        openrc)  rc-update show default 2>/dev/null | grep -qE "^[[:space:]]*${name}[[:space:]]" ;;
+        *) return 1 ;;
+    esac
+}
 
 svc_restart() {
-    local svc="$1"
-    systemctl daemon-reload 2>/dev/null
-    systemctl enable "$svc" 2>/dev/null
-    systemctl restart "$svc" 2>/dev/null || return 1
+    detect_init
+    local svc="$1" name
+    name="$(svc_name "$svc")"
+    case "$SYS_INIT" in
+        systemd)
+            systemctl daemon-reload 2>/dev/null
+            systemctl enable "$svc" 2>/dev/null
+            systemctl restart "$svc" 2>/dev/null || return 1
+            ;;
+        openrc)
+            rc-update add "$name" default 2>/dev/null
+            rc-service "$name" restart 2>/dev/null || return 1
+            ;;
+        *) return 1 ;;
+    esac
     sleep 2
     svc_active "$svc"
+}
+
+svc_stop() {
+    detect_init
+    local name
+    name="$(svc_name "$1")"
+    case "$SYS_INIT" in
+        systemd) systemctl stop "$1" 2>/dev/null ;;
+        openrc)  rc-service "$name" stop 2>/dev/null ;;
+    esac
+}
+
+# 安装服务：根据 init 系统写入 systemd unit 或 OpenRC init 脚本并设为开机自启
+# 用法: svc_install <服务名.service> <描述> <可执行文件> <启动参数> [日志文件]
+# 示例: svc_install "yuan-ss.service" "Yuan Shadowsocks" "/usr/local/bin/ssserver" "-c /etc/yuan/ss/config.json"
+svc_install() {
+    detect_init
+    local svc="$1" desc="$2" cmd="$3" args="${4:-}" logfile="$5" name
+    name="$(svc_name "$svc")"
+    [[ -n "$logfile" ]] || logfile="/var/log/${name}.log"
+    case "$SYS_INIT" in
+        systemd)
+            cat > "/etc/systemd/system/${svc}" <<EOF
+[Unit]
+Description=$desc
+After=network.target nss-lookup.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=$cmd $args
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            ;;
+        openrc)
+            cat > "/etc/init.d/${name}" <<EOF
+#!/sbin/openrc-run
+description="$desc"
+command="$cmd"
+command_args="$args"
+command_background=true
+pidfile="/run/${name}.pid"
+output_log="$logfile"
+error_log="$logfile"
+
+depend() {
+    need net
+}
+EOF
+            chmod +x "/etc/init.d/${name}"
+            ;;
+        *) err "不支持的 init 系统，无法安装服务"; return 1 ;;
+    esac
+}
+
+# 卸载服务：停止、取消自启、删除服务定义
+# 用法: svc_uninstall <服务名.service>
+svc_uninstall() {
+    detect_init
+    local svc="$1" name
+    name="$(svc_name "$svc")"
+    case "$SYS_INIT" in
+        systemd)
+            systemctl stop "$svc" 2>/dev/null
+            systemctl disable "$svc" 2>/dev/null
+            rm -f "/etc/systemd/system/${svc}"
+            rm -rf "/etc/systemd/system/${svc}.d"
+            systemctl daemon-reload 2>/dev/null
+            ;;
+        openrc)
+            rc-service "$name" stop 2>/dev/null
+            rc-update del "$name" default 2>/dev/null
+            rm -f "/etc/init.d/${name}"
+            ;;
+    esac
+}
+
+# 查看服务日志（最近 N 行）：svc_logs <服务名.service> [行数]
+svc_logs() {
+    detect_init
+    local svc="$1" lines="${2:-60}" name logfile
+    name="$(svc_name "$svc")"
+    case "$SYS_INIT" in
+        systemd) journalctl -u "$svc" -n "$lines" --no-pager 2>/dev/null ;;
+        openrc)
+            logfile="/var/log/${name}.log"
+            if [[ -f "$logfile" ]]; then tail -n "$lines" "$logfile"
+            else warn "暂无日志文件：$logfile"; fi
+            ;;
+    esac
+}
+
+# 实时跟踪服务日志：svc_logs_follow <服务名.service>
+svc_logs_follow() {
+    detect_init
+    local svc="$1" name logfile
+    name="$(svc_name "$svc")"
+    case "$SYS_INIT" in
+        systemd) journalctl -u "$svc" -f --output cat 2>/dev/null ;;
+        openrc)
+            logfile="/var/log/${name}.log"
+            if [[ -f "$logfile" ]]; then tail -f "$logfile"
+            else warn "暂无日志文件：$logfile"; fi
+            ;;
+    esac
 }
 
 # ---------------- 杂项 ----------------

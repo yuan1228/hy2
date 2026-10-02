@@ -78,6 +78,8 @@ ss_deploy() {
 
     bold "—— 部署 Shadowsocks (2022) ——"
     echo
+    # openssl 必须在 gen_pass 调用前就绪（默认值求值时会用到）
+    ensure_cmd openssl openssl
     ask_port "监听端口 (TCP+UDP)" "${SS_OLD_PORT:-8388}" port
     ask_secret "连接密码" "${SS_OLD_PASS:-$(gen_pass 24)}" pass
     dim "加密方式：$SS_METHOD（固定，安全性与性能兼顾）"
@@ -101,23 +103,10 @@ ss_deploy() {
 EOF
     chmod 600 "$SS_DIR/config.json"
 
-    step "[3/4] 启动服务并设置开机自启…"
-    cat > "/etc/systemd/system/${SS_SVC}.service" <<EOF
-[Unit]
-Description=Yuan VPS 工具箱 Shadowsocks
-After=network.target nss-lookup.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=$SS_BIN -c $SS_DIR/config.json
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=1048576
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    step "[3/4] 安装服务并设置开机自启…"
+    svc_install "$SS_SVC" "Yuan VPS 工具箱 Shadowsocks" \
+        "$SS_BIN" "-c $SS_DIR/config.json" \
+        || { err "服务安装失败"; echo; pause; return 1; }
     if ! svc_restart "$SS_SVC"; then
         err "服务启动失败，请查看运行日志排查"
         echo; pause; return 1
@@ -162,17 +151,16 @@ ss_restart() {
 ss_logs() {
     info "最近 60 行日志（下方实时跟踪，Ctrl+C 停止）"
     echo
-    journalctl -u "$SS_SVC" -n 60 --no-pager
+    svc_logs "$SS_SVC" 60
     echo
-    journalctl -u "$SS_SVC" -f --output cat
+    svc_logs_follow "$SS_SVC"
 }
 
 ss_uninstall() {
     confirm "确定彻底卸载 Shadowsocks 吗？配置将全部删除" || return 0
-    systemctl stop "$SS_SVC" 2>/dev/null
-    systemctl disable "$SS_SVC" 2>/dev/null
-    rm -f "/etc/systemd/system/${SS_SVC}.service"
-    systemctl daemon-reload 2>/dev/null
+    step "停止并移除服务…"
+    svc_uninstall "$SS_SVC"
+    step "删除配置…"
     rm -rf "$SS_DIR"
     ok "Shadowsocks 已彻底卸载"
     echo; pause

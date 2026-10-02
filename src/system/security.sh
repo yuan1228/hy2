@@ -48,8 +48,8 @@ check "BBR 拥塞算法已启用" \
 echo
 echo ""
 check "fail2ban 已安装运行" \
-"systemctl is-active --quiet fail2ban" \
-"apt install fail2ban 可防 SSH 爆破"
+"svc_active fail2ban" \
+"安装 fail2ban 可防 SSH 爆破（Alpine: apk add fail2ban）"
 check "非常驻：无可疑的定时任务" \
 "! crontab -l 2>/dev/null | grep -qE 'curl|wget.*sh\|'" \
 "检查 crontab -l，确认无陌生下载执行项"
@@ -65,7 +65,7 @@ err "风险较高：$score/$total，强烈建议逐项整改"
 fi
 echo
 dim "当前监听端口（人工复核）："
-ss -tuln 2>/dev/null | awk 'NR>1 {print " " $1, $5}' | sort -u
+show_listening
 echo
 pause
 }

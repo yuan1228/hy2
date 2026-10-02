@@ -37,6 +37,8 @@ trojan_deploy() {
 
     bold "—— 部署 Trojan ——"
     echo
+    # openssl 必须在 gen_hex 调用前就绪（默认值求值时会用到）
+    ensure_cmd openssl openssl
     ask_port "监听 TCP 端口" "${TROJAN_OLD_PORT:-4443}" port
     ask_secret "连接密码" "${TROJAN_OLD_PASS:-$(gen_hex 16)}" pass
     ask_input "伪装域名 (SNI/证书 CN)" "${TROJAN_OLD_SNI:-www.cloudflare.com}" sni
@@ -124,17 +126,16 @@ trojan_restart() {
 trojan_logs() {
     info "最近 60 行日志（下方实时跟踪，Ctrl+C 停止）"
     echo
-    journalctl -u "$TROJAN_SVC" -n 60 --no-pager
+    svc_logs "$TROJAN_SVC" 60
     echo
-    journalctl -u "$TROJAN_SVC" -f --output cat
+    svc_logs_follow "$TROJAN_SVC"
 }
 
 trojan_uninstall() {
     confirm "确定彻底卸载 Trojan 吗？配置与证书将全部删除" || return 0
-    systemctl stop "$TROJAN_SVC" 2>/dev/null
-    systemctl disable "$TROJAN_SVC" 2>/dev/null
-    rm -f "/etc/systemd/system/${TROJAN_SVC}"
-    systemctl daemon-reload 2>/dev/null
+    step "停止并移除服务…"
+    svc_uninstall "$TROJAN_SVC"
+    step "删除配置…"
     rm -rf "$TROJAN_DIR"
     ok "Trojan 已彻底卸载"
     echo; pause

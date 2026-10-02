@@ -66,8 +66,14 @@ sys_clean() {
             ;;
     esac
 
-    step "清理 journal 日志（保留最近 7 天）…"
-    journalctl --vacuum-time=7d >/dev/null 2>&1
+    detect_init
+    if [[ "$SYS_INIT" == "systemd" ]]; then
+        step "清理 journal 日志（保留最近 7 天）…"
+        journalctl --vacuum-time=7d >/dev/null 2>&1
+    else
+        step "清理服务日志（保留最近 7 天）…"
+        find /var/log -name "*.log" -type f -mtime +7 -delete 2>/dev/null
+    fi
 
     step "清理临时文件…"
     rm -rf /tmp/* /var/tmp/* 2>/dev/null

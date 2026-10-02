@@ -132,7 +132,7 @@ fw_show() {
     esac
     echo
     echo "当前监听端口："
-    ss -tuln 2>/dev/null | awk 'NR>1 {print "  " $1, $5}' | sort -u
+    show_listening
     echo
     pause
 }

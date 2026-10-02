@@ -60,6 +60,7 @@ xray_uuid() {
 }
 
 xray_shortid() {
+    ensure_cmd openssl openssl
     openssl rand -hex 8 2>/dev/null | cut -c1-8
 }
 
@@ -76,28 +77,15 @@ xray_selfcert() {
     [[ -s "$dir/server.key" && -s "$dir/server.crt" ]]
 }
 
-# 写入 xray systemd 单元并启动，参数：服务名 配置路径
+# 写入服务（systemd unit 或 OpenRC init 脚本）并启动，参数：服务名 配置路径
 xray_deploy_service() {
     local svc="$1" conf="$2"
     "$XRAY_BIN" -test -config "$conf" >/dev/null 2>&1 \
         || { err "Xray 配置校验未通过"; return 1; }
     # 兼容清理：v3.1.x 曾误写成 ${svc}.service（如 yuan-vless.service.service）
     rm -f "/etc/systemd/system/${svc}.service"
-    cat > "/etc/systemd/system/${svc}" <<EOF
-[Unit]
-Description=Yuan VPS 工具箱 Xray ($svc)
-After=network.target nss-lookup.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=$XRAY_BIN run -config $conf
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=1048576
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    svc_install "$svc" "Yuan VPS 工具箱 Xray ($svc)" \
+        "$XRAY_BIN" "run -config $conf" \
+        || { err "服务安装失败"; return 1; }
     svc_restart "$svc"
 }
