@@ -63,7 +63,7 @@ hy2_ensure_bin() {
             aarch64) arch="arm64" ;;
             *) err "Hysteria2 不支持该架构：$(uname -m)"; return 1 ;;
         esac
-        step "下载 hysteria 二进制（Alpine 直接下载模式）…"
+        step "下载 hysteria 二进制…"
         url="https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-${arch}"
         if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$HY2_BIN"; then
             err "hysteria 下载失败，请检查网络后重试"
