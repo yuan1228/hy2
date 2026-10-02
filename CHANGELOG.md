@@ -1,5 +1,12 @@
 # 更新日志
 
+## v3.2.1 (2026-10-02)
+
+- **网络调优升级**：`tuning_general`（通用优化）新增 UDP/QUIC 专项——
+  默认收发缓冲提到 4MB（原 212KB，Hysteria2 跑 QUIC 时小缓冲是瓶颈）、
+  `udp_rmem_min`/`udp_wmem_min`、`udp_mem`、TCP rmem/wmem 三元组、
+  `optmem_max`；写入前自动备份旧配置
+
 ## v3.2.0 (2026-10-02)
 
 **Alpine 实战修复**（瑞典 Alpine 服务器上 hy2 超时的根因）：

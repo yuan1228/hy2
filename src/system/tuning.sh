@@ -82,21 +82,37 @@ tuning_reset() {
 }
 
 # 通用优化：收发缓冲区、backlog、MTU 探测等（容器安全，可回滚）
+# v3.2.1: 新增 UDP/QUIC 专项（Hysteria2 提速：默认缓冲 4MB + udp_mem）
 tuning_general() {
     local conf="/etc/sysctl.d/99-yuan-tuning.conf"
+    # 先备份已有配置
+    [[ -f "$conf" ]] && cp "$conf" "${conf}.bak" 2>/dev/null
     cat > "$conf" <<'EOF'
-# Yuan VPS 工具箱 通用网络优化
+# Yuan VPS 工具箱 通用网络优化（含 Hysteria2/QUIC UDP 专项）
+# 回滚：删除本文件后执行 sysctl --system
+# --- TCP/UDP 收发缓冲 ---
 net.core.rmem_max = 67108864
 net.core.wmem_max = 67108864
-net.core.netdev_max_backlog = 250000
-net.core.somaxconn = 4096
+net.core.rmem_default = 4194304
+net.core.wmem_default = 4194304
+net.core.optmem_max = 65536
+# --- UDP/QUIC 专项（Hysteria2） ---
+net.ipv4.udp_rmem_min = 8192
+net.ipv4.udp_wmem_min = 8192
+net.ipv4.udp_mem = 65536 131072 262144
+# --- TCP 专项 ---
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_slow_start_after_idle = 0
+# --- 通用 ---
+net.core.netdev_max_backlog = 250000
+net.core.somaxconn = 4096
 EOF
     chmod 644 "$conf"
     sysctl --system >/dev/null 2>&1
-    ok "通用优化参数已写入 $conf 并生效"
+    ok "通用优化参数已写入 $conf 并生效（含 UDP/QUIC 专项）"
     dim  "如需回滚，删除该文件后执行 sysctl --system"
     echo; pause
 }
