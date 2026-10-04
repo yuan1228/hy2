@@ -397,6 +397,30 @@ svc_logs_follow() {
 }
 
 # ---------------- 杂项 ----------------
+# 临时 DNS64 下载：纯 IPv6 下经 NAT64 拉 GitHub，完事恢复 resolv.conf，不留残留
+# 用法：nat64_fetch <url> <输出文件>；成功返回 0
+nat64_fetch() {
+    local url="$1" out="$2"
+    local resolv_bak="" dns64="2a00:1098:2b::1"
+    # 备份 resolv.conf
+    if [[ -f /etc/resolv.conf ]]; then
+        resolv_bak="$(mktemp)"
+        cp /etc/resolv.conf "$resolv_bak"
+    fi
+    # 临时换 DNS64
+    printf 'nameserver %s\n' "$dns64" > /etc/resolv.conf 2>/dev/null
+    local rc=1
+    if curl -fsSL --max-time 120 --retry 2 "$url" -o "$out" 2>/dev/null; then
+        rc=0
+    fi
+    # 恢复 resolv.conf，不留残留
+    if [[ -n "$resolv_bak" && -f "$resolv_bak" ]]; then
+        cat "$resolv_bak" > /etc/resolv.conf 2>/dev/null
+        rm -f "$resolv_bak"
+    fi
+    return $rc
+}
+
 # 取 GitHub 仓库最新 release 的 tag（如 v26.3.27），输出 tag，失败返回非零
 # 注意：必须用 grep -o 只取 "tag_name":"..." 片段，不能按整行 cut；
 # 某些网络下 API 返回的是压缩成单行的 JSON，按整行 cut 会错取成 url 字段

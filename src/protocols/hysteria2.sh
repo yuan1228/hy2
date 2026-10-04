@@ -71,26 +71,24 @@ hy2_ensure_bin() {
                     dl_ok=1
                 fi
             fi
-            # jsDelivr 兜底：仓库内自带 hysteria 二进制（gzip 压缩，有 IPv6）
-            # 纯 v6 机器走这里，不用再手动下载
+            # 纯 IPv6 兜底：临时 DNS64/NAT64 拉 GitHub 官方二进制，完事恢复，不留残留
             if [[ "$dl_ok" != "1" ]]; then
                 case "$(uname -m)" in
-                    x86_64) _js_arch="amd64" ;;
-                    aarch64) _js_arch="arm64" ;;
-                    *) _js_arch="" ;;
+                    x86_64) _n64_arch="amd64" ;;
+                    aarch64) _n64_arch="arm64" ;;
+                    *) _n64_arch="" ;;
                 esac
-                if [[ -n "$_js_arch" ]]; then
-                    _js_url="https://cdn.jsdelivr.net/gh/yuan1228/hy2@main/bin/hysteria-linux-${_js_arch}.gz"
-                    if curl -fsSL --max-time 120 --retry 2 "$_js_url" -o "${HY2_BIN}.gz" 2>/dev/null; then
-                        if gzip -d -f "${HY2_BIN}.gz" 2>/dev/null && [[ -f "$HY2_BIN" ]]; then
-                            chmod +x "$HY2_BIN"
-                            if "$HY2_BIN" version >/dev/null 2>&1; then
-                                dl_ok=1
-                                dim "已通过 jsDelivr 获取 hysteria 二进制"
-                            fi
+                if [[ -n "$_n64_arch" ]]; then
+                    _n64_ver="${HY2_VER:-v2.12.3}"
+                    _n64_url="https://github.com/apernet/hysteria/releases/download/${_n64_ver}/hysteria-linux-${_n64_arch}"
+                    dim "纯 IPv6，临时经 NAT64 下载 hysteria…"
+                    if nat64_fetch "$_n64_url" "$HY2_BIN" 2>/dev/null; then
+                        chmod +x "$HY2_BIN"
+                        if "$HY2_BIN" version >/dev/null 2>&1; then
+                            dl_ok=1
+                            dim "已通过临时 NAT64 获取 hysteria 二进制"
                         fi
                     fi
-                    rm -f "${HY2_BIN}.gz" 2>/dev/null
                 fi
             fi
             if [[ "$dl_ok" != "1" ]]; then

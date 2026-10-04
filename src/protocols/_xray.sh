@@ -23,7 +23,7 @@ xray_ensure() {
 
     step "获取 Xray 最新版本…"
     ver="$(github_latest_tag "XTLS/Xray-core")" \
-        || { err "无法获取 Xray 版本（网络或 GitHub API 异常）"; return 1; }
+        || { warn "GitHub API 不可达（纯 IPv6），改用内置版本"; ver="v26.3.27"; }
 
     if [[ -x "$XRAY_BIN" && "$(cat "$XRAY_VER_FILE" 2>/dev/null)" == "$ver" ]]; then
         if "$XRAY_BIN" version >/dev/null 2>&1; then
@@ -37,15 +37,20 @@ xray_ensure() {
     url="https://github.com/XTLS/Xray-core/releases/download/${ver}/Xray-linux-${arch_dl}.zip"
     tmpdir="$(mktemp -d)"
     if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$tmpdir/xray.zip"; then
-        rm -rf "$tmpdir"
-        err "Xray 下载失败"
-        # GitHub 无 IPv6，纯 v6 机器无法直连下载
-        if ! curl -6s --max-time 5 -o /dev/null https://github.com 2>/dev/null; then
-            warn "检测到纯 IPv6 网络，GitHub 无 IPv6 地址"
-            warn "请手动下载 Xray-linux-${arch_dl}.zip（从 https://github.com/XTLS/Xray-core/releases）"
-            warn "解压得到 xray 二进制后，复制到 $XRAY_BIN 并 chmod +x，再重跑部署"
+        # GitHub 失败，纯 IPv6 下临时经 NAT64 下载，完事恢复，不留残留
+        warn "GitHub 下载失败，纯 IPv6 下临时经 NAT64 下载…"
+        if ! nat64_fetch "$url" "$tmpdir/xray.zip"; then
+            rm -rf "$tmpdir"
+            err "Xray 下载失败"
+            # GitHub 无 IPv6，纯 v6 机器无法直连下载
+            if ! curl -6s --max-time 5 -o /dev/null https://github.com 2>/dev/null; then
+                warn "检测到纯 IPv6 网络，GitHub 无 IPv6 地址"
+                warn "请手动下载 Xray-linux-${arch_dl}.zip（从 https://github.com/XTLS/Xray-core/releases）"
+                warn "解压得到 xray 二进制后，复制到 $XRAY_BIN 并 chmod +x，再重跑部署"
+            fi
+            return 1
         fi
-        return 1
+        # NAT64 下载成功，版本即为请求的版本
     fi
     mkdir -p "$YUAN_BIN_DIR"
     unzip -o -q "$tmpdir/xray.zip" xray -d "$YUAN_BIN_DIR"

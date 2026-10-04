@@ -14,6 +14,10 @@ update_panel() {
 
     local remote_ver
     remote_ver="$(curl -fsSL --max-time 15 "$YUAN_REPO/raw/refs/heads/main/version.txt" 2>/dev/null | tr -d '[:space:]')"
+    # jsDelivr 兜底（有 IPv6，GitHub 无 v6 时用）
+    if [[ -z "$remote_ver" ]]; then
+        remote_ver="$(curl -fsSL --max-time 15 "https://cdn.jsdelivr.net/gh/yuan1228/hy2@main/version.txt" 2>/dev/null | tr -d '[:space:]')"
+    fi
     # 纯 IPv6 下 raw.githubusercontent.com 可能不可达；git 安装改用 git 直接读远端 version.txt
     if [[ -z "$remote_ver" && -d "$YUAN_ROOT/.git" ]] && command -v git >/dev/null 2>&1; then
         dim "直连取版本失败，尝试经 git 获取远端版本…"
