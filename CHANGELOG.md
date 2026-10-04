@@ -18,6 +18,11 @@
   `apk add hysteria`；Xray 下载失败时给明确手动指引
 - **新功能**：`install.sh` / `update.sh` 在 git/GitHub 不可达时，
   改走 jsDelivr 逐文件拉取（有 IPv6），纯 v6 机器可安装/更新工具箱本体
+- **修 bug**：Hysteria2 的 systemd 安装路径加 fallback 链：
+  官方脚本失败时改直接下载二进制；纯 IPv6 下（GitHub 无 v6）
+  给出明确手动安装四步指引，不再只报"检查网络"
+- **新功能**：仓库内置 hysteria 二进制（`bin/` 目录，gzip 压缩），
+  纯 IPv6 机器经 jsDelivr 自动拉取，无需手动下载、无需中转
 
 ## v3.3.0 (2026-10-03)
 

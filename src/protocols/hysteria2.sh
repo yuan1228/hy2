@@ -54,9 +54,64 @@ hy2_ensure_bin() {
     fi
     ensure_cmd curl curl
     if [[ "$SYS_INIT" == "systemd" ]]; then
-        if ! bash <(curl -fsSL --max-time 60 https://get.hy2.sh/); then
-            err "官方安装脚本执行失败，请检查网络后重试"
-            return 1
+        # 先试官方脚本（IPv4 下正常；纯 IPv6 下因 GitHub 无 v6 会失败）
+        if bash <(curl -fsSL --max-time 60 https://get.hy2.sh/) 2>/dev/null; then
+            : # 官方脚本成功
+        else
+            warn "官方安装脚本失败，尝试直接下载二进制…"
+            # 直接从 GitHub 取（IPv4 可达时用）
+            ver="$(github_latest_tag "apernet/hysteria" 2>/dev/null)"
+            # github_latest_tag 返回的是 app/vX.Y.Z 格式？实际取 release tag
+            # Hysteria 的 release tag 形如 app/v2.12.3，download 路径用 app/ 前缀
+            dl_ok=0
+            if [[ -n "$ver" ]]; then
+                url="https://github.com/apernet/hysteria/releases/download/app/${ver}/hysteria-linux-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+                if curl -fsSL --max-time 120 --retry 2 "$url" -o "$HY2_BIN" 2>/dev/null; then
+                    chmod +x "$HY2_BIN"
+                    dl_ok=1
+                fi
+            fi
+            # jsDelivr 兜底：仓库内自带 hysteria 二进制（gzip 压缩，有 IPv6）
+            # 纯 v6 机器走这里，不用再手动下载
+            if [[ "$dl_ok" != "1" ]]; then
+                case "$(uname -m)" in
+                    x86_64) _js_arch="amd64" ;;
+                    aarch64) _js_arch="arm64" ;;
+                    *) _js_arch="" ;;
+                esac
+                if [[ -n "$_js_arch" ]]; then
+                    _js_url="https://cdn.jsdelivr.net/gh/yuan1228/hy2@main/bin/hysteria-linux-${_js_arch}.gz"
+                    if curl -fsSL --max-time 120 --retry 2 "$_js_url" -o "${HY2_BIN}.gz" 2>/dev/null; then
+                        if gzip -d -f "${HY2_BIN}.gz" 2>/dev/null && [[ -f "$HY2_BIN" ]]; then
+                            chmod +x "$HY2_BIN"
+                            if "$HY2_BIN" version >/dev/null 2>&1; then
+                                dl_ok=1
+                                dim "已通过 jsDelivr 获取 hysteria 二进制"
+                            fi
+                        fi
+                    fi
+                    rm -f "${HY2_BIN}.gz" 2>/dev/null
+                fi
+            fi
+            if [[ "$dl_ok" != "1" ]]; then
+                err "Hysteria2 二进制下载失败"
+                echo
+                # 纯 IPv6 检测：GitHub 无 IPv6，这是根本原因
+                if ! curl -6s --max-time 5 -o /dev/null https://github.com 2>/dev/null; then
+                    warn "检测到纯 IPv6 网络：GitHub（含 api.github.com）没有 IPv6 地址，"
+                    warn "Hysteria 官方只在 GitHub releases 发布二进制，无法自动下载。"
+                    echo
+                    info "手动安装步骤（在有 IPv4 的电脑/手机上操作一次即可）："
+                    info "  1. 下载：https://github.com/apernet/hysteria/releases/latest"
+                    info "     选 hysteria-linux-amd64（x86_64）或 hysteria-linux-arm64"
+                    info "  2. 传到本机 /usr/local/bin/hysteria（scp/sftp/面板文件管理均可）"
+                    info "  3. 执行：chmod +x /usr/local/bin/hysteria"
+                    info "  4. 重新运行 yuan → Hysteria2 → 安装，会跳过下载直接部署"
+                else
+                    err "请检查网络后重试"
+                fi
+                echo; pause; return 1
+            fi
         fi
     else
         local arch url
