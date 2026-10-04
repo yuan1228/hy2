@@ -46,8 +46,29 @@ if [[ -d "$INSTALL_DIR/.git" ]] && command -v git >/dev/null 2>&1; then
 elif command -v git >/dev/null 2>&1; then
     c_info "▸ 克隆仓库…"
     rm -rf "$INSTALL_DIR"
-    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" --quiet \
-        || { c_err "克隆失败，请检查网络"; exit 1; }
+    if ! git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" --quiet 2>/dev/null; then
+        c_warn "git 克隆失败（GitHub 无 IPv6？），改走 jsDelivr 逐文件下载…"
+        rm -rf "$INSTALL_DIR"
+        mkdir -p "$INSTALL_DIR"
+        _js_ok=1
+        for _f in version.txt yuan install.sh \
+            src/common.sh src/menu.sh src/update.sh \
+            src/protocols/hysteria2.sh src/protocols/_xray.sh src/protocols/vless.sh \
+            src/protocols/trojan.sh src/protocols/shadowsocks.sh \
+            src/net/warp.sh src/net/tcpquality.sh src/net/nodequality.sh \
+            src/system/firewall.sh src/system/info.sh src/system/maintenance.sh \
+            src/system/pkgs.sh src/system/security.sh src/system/tuning.sh; do
+            mkdir -p "$INSTALL_DIR/$(dirname "$_f")"
+            if ! curl -fsSL --max-time 30 "https://cdn.jsdelivr.net/gh/yuan1228/hy2@main/$_f" \
+                -o "$INSTALL_DIR/$_f" 2>/dev/null; then
+                c_err "文件下载失败：$_f"
+                _js_ok=0
+                break
+            fi
+        done
+        [[ "$_js_ok" == "1" ]] || { c_err "安装失败，请检查网络"; exit 1; }
+        c_info "▸ jsDelivr 下载完成"
+    fi
 else
     c_info "▸ 下载 tarball…"
     tmp="$(mktemp -d)"

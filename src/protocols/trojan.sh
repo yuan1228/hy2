@@ -58,6 +58,7 @@ trojan_deploy() {
   "inbounds": [
     {
       "port": $port,
+      "listen": "::",
       "protocol": "trojan",
       "settings": {
         "clients": [ { "password": "$pass" } ]

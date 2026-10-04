@@ -67,6 +67,7 @@ vless_deploy() {
   "inbounds": [
     {
       "port": $port,
+      "listen": "::",
       "protocol": "vless",
       "settings": {
         "clients": [ { "id": "$uuid", "flow": "xtls-rprx-vision" } ],

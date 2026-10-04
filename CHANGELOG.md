@@ -1,5 +1,24 @@
 # 更新日志
 
+## v3.4.0 (2026-10-05)
+
+**纯 IPv6 全面支持**（GitHub 主站/API 无 IPv6 地址，纯 v6 机器原先大面积失败）：
+
+- **修 bug**：`github_latest_tag()` 加 jsDelivr 兜底（有 IPv6），取版本三路：
+  GitHub API → github.com 跳转 → jsDelivr data API；IPv4 原逻辑不动
+- **修 bug**：Shadowsocks 下载失败时改走 `apt install shadowsocks-rust`
+  （Debian 官方源有 IPv6），纯 v6 机器可装上
+- **修 bug**：VLESS/Trojan 的 Xray inbound 加 `"listen": "::"`，
+  原先默认只监听 IPv4，纯 v6 机器上客户端连不上
+- **修 bug**：Hysteria2 端口跳跃加 IPv6 规则（iptables→ip6tables，
+  nft 加 ip6 表），纯 v6 下跳跃转发生效；卸载时同步清理 v6 规则
+- **修 bug**：防火墙 `fw_allow`/`fw_lockdown` 的 iptables 后端同步加
+  ip6tables 放行，纯 v6 下端口能放通
+- **修 bug**：Hysteria2 非 systemd（Alpine）路径下载失败时改试
+  `apk add hysteria`；Xray 下载失败时给明确手动指引
+- **新功能**：`install.sh` / `update.sh` 在 git/GitHub 不可达时，
+  改走 jsDelivr 逐文件拉取（有 IPv6），纯 v6 机器可安装/更新工具箱本体
+
 ## v3.3.0 (2026-10-03)
 
 - **新功能：Hysteria2 端口跳跃**：部署时可选启用，iptables/nftables 把一段

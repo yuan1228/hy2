@@ -37,7 +37,15 @@ xray_ensure() {
     url="https://github.com/XTLS/Xray-core/releases/download/${ver}/Xray-linux-${arch_dl}.zip"
     tmpdir="$(mktemp -d)"
     if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$tmpdir/xray.zip"; then
-        rm -rf "$tmpdir"; err "Xray 下载失败"; return 1
+        rm -rf "$tmpdir"
+        err "Xray 下载失败"
+        # GitHub 无 IPv6，纯 v6 机器无法直连下载
+        if ! curl -6s --max-time 5 -o /dev/null https://github.com 2>/dev/null; then
+            warn "检测到纯 IPv6 网络，GitHub 无 IPv6 地址"
+            warn "请手动下载 Xray-linux-${arch_dl}.zip（从 https://github.com/XTLS/Xray-core/releases）"
+            warn "解压得到 xray 二进制后，复制到 $XRAY_BIN 并 chmod +x，再重跑部署"
+        fi
+        return 1
     fi
     mkdir -p "$YUAN_BIN_DIR"
     unzip -o -q "$tmpdir/xray.zip" xray -d "$YUAN_BIN_DIR"

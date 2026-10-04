@@ -53,7 +53,23 @@ ss_ensure_bin() {
     url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${ver}/shadowsocks-${ver#v}.${arch_dl}.tar.xz"
     tmpdir="$(mktemp -d)"
     if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$tmpdir/ss.tar.xz"; then
-        rm -rf "$tmpdir"; err "ssserver 下载失败"; return 1
+        rm -rf "$tmpdir"
+        # GitHub 无 IPv6，纯 v6 机器下载失败时改走 apt（Debian 官方源有 IPv6）
+        if command -v apt-get >/dev/null 2>&1; then
+            warn "GitHub 下载失败，改用 apt 安装 shadowsocks-rust…"
+            if apt-get update -qq 2>/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq shadowsocks-rust 2>/dev/null; then
+                apt_bin="$(command -v ssserver)"
+                if [[ -x "$apt_bin" ]]; then
+                    mkdir -p "$YUAN_BIN_DIR"
+                    cp -f "$apt_bin" "$SS_BIN" && chmod +x "$SS_BIN"
+                    ver="apt-$(dpkg-query -W -f='${Version}' shadowsocks-rust 2>/dev/null | cut -d'-' -f1)"
+                    printf '%s' "$ver" > "$SS_VER_FILE"
+                    ok "ssserver 已通过 apt 安装 ($ver)"
+                    return 0
+                fi
+            fi
+        fi
+        err "ssserver 下载失败"; return 1
     fi
     mkdir -p "$YUAN_BIN_DIR"
     tar -xJf "$tmpdir/ss.tar.xz" -C "$tmpdir"

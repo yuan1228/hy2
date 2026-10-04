@@ -413,6 +413,17 @@ github_latest_tag() {
     tag="$(curl -fsSL -o /dev/null -w '%{url_effective}' --max-time 20 \
         "https://github.com/${repo}/releases/latest" 2>/dev/null \
         | sed -n 's|.*/releases/tag/||p' | cut -d'?' -f1 | cut -d'#' -f1 | head -1)"
+    if [[ "$tag" =~ ^v?[0-9] ]]; then
+        printf '%s' "$tag"
+        return 0
+    fi
+    # jsDelivr 兜底：有 IPv6，GitHub 主站/API 均无 IPv6 时用；
+    # 返回的 version 无 v 前缀（如 1.25.0），补上以匹配 GitHub tag 格式
+    tag="$(curl -fsSL --max-time 20 "https://data.jsdelivr.com/v1/packages/gh/${repo}" 2>/dev/null \
+        | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)"
+    if [[ "$tag" =~ ^[0-9] ]]; then
+        tag="v$tag"
+    fi
     [[ "$tag" =~ ^v?[0-9] ]] || return 1
     printf '%s' "$tag"
 }

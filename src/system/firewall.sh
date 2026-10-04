@@ -29,6 +29,11 @@ fw_allow() {
             for p in $(fw_proto_list "$proto"); do
                 iptables -C INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null \
                     || iptables -I INPUT -p "$p" --dport "$port" -j ACCEPT
+                # IPv6：同步放行（纯 v6 机器必需）
+                if command -v ip6tables >/dev/null 2>&1; then
+                    ip6tables -C INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null \
+                        || ip6tables -I INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null || true
+                fi
             done
             fw_ipt_save
             ;;
@@ -65,6 +70,7 @@ fw_ipt_save() {
         netfilter-persistent save >/dev/null 2>&1
     elif [[ -d /etc/iptables ]]; then
         iptables-save > /etc/iptables/rules.v4 2>/dev/null
+        command -v ip6tables-save >/dev/null 2>&1 && ip6tables-save > /etc/iptables/rules.v6 2>/dev/null || true
     fi
 }
 
@@ -104,6 +110,10 @@ fw_lockdown() {
                 [[ "$p" == "22" && "$pr" == "udp" ]] && continue
                 iptables -C INPUT -p "$pr" --dport "$p" -j ACCEPT 2>/dev/null \
                     || iptables -I INPUT -p "$pr" --dport "$p" -j ACCEPT
+                if command -v ip6tables >/dev/null 2>&1; then
+                    ip6tables -C INPUT -p "$pr" --dport "$p" -j ACCEPT 2>/dev/null \
+                        || ip6tables -I INPUT -p "$pr" --dport "$p" -j ACCEPT 2>/dev/null || true
+                fi
             done
         done
         fw_ipt_save

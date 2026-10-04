@@ -68,10 +68,32 @@ hy2_ensure_bin() {
         step "下载 hysteria 二进制…"
         url="https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-${arch}"
         if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$HY2_BIN"; then
-            err "hysteria 下载失败，请检查网络后重试"
-            return 1
+            # GitHub 无 IPv6，纯 v6 下改试 apk（Alpine 官方源有 IPv6）
+            if command -v apk >/dev/null 2>&1; then
+                warn "GitHub 下载失败，改用 apk 安装 hysteria…"
+                if apk add --no-cache hysteria 2>/dev/null; then
+                    apk_bin="$(command -v hysteria)"
+                    if [[ -x "$apk_bin" && "$apk_bin" != "$HY2_BIN" ]]; then
+                        cp -f "$apk_bin" "$HY2_BIN"
+                    fi
+                    chmod +x "$HY2_BIN" 2>/dev/null || true
+                    if [[ -x "$HY2_BIN" ]]; then
+                        ok "hysteria 已通过 apk 安装"
+                    else
+                        err "hysteria 下载失败，请检查网络后重试"
+                        return 1
+                    fi
+                else
+                    err "hysteria 下载失败，请检查网络后重试"
+                    return 1
+                fi
+            else
+                err "hysteria 下载失败，请检查网络后重试"
+                return 1
+            fi
+        else
+            chmod +x "$HY2_BIN"
         fi
-        chmod +x "$HY2_BIN"
     fi
     if [[ ! -x "$HY2_BIN" ]] || ! "$HY2_BIN" version >/dev/null 2>&1; then
         err "hysteria 二进制校验失败（文件损坏或架构不匹配）"
@@ -113,12 +135,19 @@ hy2_setup_hop() {
 
     case "$be" in
         iptables)
-            # 幂等：先删旧规则再加
+            # 幂等：先删旧规则再加（IPv4）
             iptables -t nat -D PREROUTING -p udp --dport "${start}:${end}" \
                 -j DNAT --to-destination ":${main_port}" 2>/dev/null
             iptables -t nat -A PREROUTING -p udp --dport "${start}:${end}" \
                 -j DNAT --to-destination ":${main_port}" \
                 || { err "iptables DNAT 规则添加失败"; return 1; }
+            # IPv6：同网段加 ip6tables 规则（纯 v6 机器必需）
+            if command -v ip6tables >/dev/null 2>&1; then
+                ip6tables -t nat -D PREROUTING -p udp --dport "${start}:${end}" \
+                    -j DNAT --to-destination ":${main_port}" 2>/dev/null
+                ip6tables -t nat -A PREROUTING -p udp --dport "${start}:${end}" \
+                    -j DNAT --to-destination ":${main_port}" 2>/dev/null || true
+            fi
             fw_ipt_save
             # Alpine：iptables 服务开机从 /etc/iptables/rules-save 恢复
             if command -v rc-update >/dev/null 2>&1; then
@@ -132,6 +161,11 @@ hy2_setup_hop() {
             nft list chain ip yuan_nat prerouting >/dev/null 2>&1 || \
                 nft add chain ip yuan_nat prerouting \
                     '{ type nat hook prerouting priority -100; }' 2>/dev/null
+            # IPv6：加 ip6 表（纯 v6 机器必需）
+            nft list table ip6 yuan_nat6 >/dev/null 2>&1 || nft add table ip6 yuan_nat6
+            nft list chain ip6 yuan_nat6 prerouting >/dev/null 2>&1 || \
+                nft add chain ip6 yuan_nat6 prerouting \
+                    '{ type nat hook prerouting priority -100; }' 2>/dev/null
             # 幂等：删旧加新
             local handle
             handle="$(nft -a list chain ip yuan_nat prerouting 2>/dev/null \
@@ -142,8 +176,18 @@ hy2_setup_hop() {
             nft add rule ip yuan_nat prerouting udp dport "${start}-${end}" \
                 dnat to ":${main_port}" \
                 || { err "nftables DNAT 规则添加失败"; return 1; }
+            # IPv6 规则
+            local handle6
+            handle6="$(nft -a list chain ip6 yuan_nat6 prerouting 2>/dev/null \
+                | grep -oE "udp dport ${start}-${end}.*handle [0-9]+" \
+                | grep -oE 'handle [0-9]+' | awk '{print $2}')"
+            [[ -n "$handle6" ]] && \
+                nft delete rule ip6 yuan_nat6 prerouting handle "$handle6" 2>/dev/null
+            nft add rule ip6 yuan_nat6 prerouting udp dport "${start}-${end}" \
+                dnat to ":${main_port}" 2>/dev/null || true
             mkdir -p /etc/nftables.d
             nft list table ip yuan_nat > /etc/nftables.d/yuan_nat.nft 2>/dev/null
+            nft list table ip6 yuan_nat6 > /etc/nftables.d/yuan_nat6.nft 2>/dev/null
             ;;
     esac
 
@@ -168,6 +212,12 @@ hy2_remove_hop() {
             iptables -t nat -D PREROUTING -p udp \
                 --dport "${HOP_START}:${HOP_END}" \
                 -j DNAT --to-destination ":${HOP_MAIN_PORT}" 2>/dev/null
+            # IPv6 规则清理
+            if command -v ip6tables >/dev/null 2>&1; then
+                ip6tables -t nat -D PREROUTING -p udp \
+                    --dport "${HOP_START}:${HOP_END}" \
+                    -j DNAT --to-destination ":${HOP_MAIN_PORT}" 2>/dev/null
+            fi
             fw_ipt_save
             if command -v rc-update >/dev/null 2>&1; then
                 iptables-save > /etc/iptables/rules-save 2>/dev/null
@@ -180,8 +230,17 @@ hy2_remove_hop() {
                 | grep -oE 'handle [0-9]+' | awk '{print $2}')"
             [[ -n "$handle" ]] && \
                 nft delete rule ip yuan_nat prerouting handle "$handle" 2>/dev/null
+            # IPv6 规则清理
+            local handle6
+            handle6="$(nft -a list chain ip6 yuan_nat6 prerouting 2>/dev/null \
+                | grep -oE "udp dport ${HOP_START}-${HOP_END}.*handle [0-9]+" \
+                | grep -oE 'handle [0-9]+' | awk '{print $2}')"
+            [[ -n "$handle6" ]] && \
+                nft delete rule ip6 yuan_nat6 prerouting handle "$handle6" 2>/dev/null
             mkdir -p /etc/nftables.d
             nft list table ip yuan_nat > /etc/nftables.d/yuan_nat.nft 2>/dev/null
+            nft list table ip6 yuan_nat6 > /etc/nftables.d/yuan_nat6.nft 2>/dev/null
+            nft list table ip6 yuan_nat6 > /etc/nftables.d/yuan_nat6.nft 2>/dev/null
             ;;
     esac
     rm -f "$HY2_HOP_CONF"
