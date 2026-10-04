@@ -14,6 +14,12 @@ update_panel() {
 
     local remote_ver
     remote_ver="$(curl -fsSL --max-time 15 "$YUAN_REPO/raw/refs/heads/main/version.txt" 2>/dev/null | tr -d '[:space:]')"
+    # 纯 IPv6 下 raw.githubusercontent.com 可能不可达；git 安装改用 git 直接读远端 version.txt
+    if [[ -z "$remote_ver" && -d "$YUAN_ROOT/.git" ]] && command -v git >/dev/null 2>&1; then
+        dim "直连取版本失败，尝试经 git 获取远端版本…"
+        git -C "$YUAN_ROOT" fetch --quiet origin 2>/dev/null
+        remote_ver="$(git -C "$YUAN_ROOT" show origin/main:version.txt 2>/dev/null | tr -d '[:space:]')"
+    fi
     if [[ -z "$remote_ver" ]]; then
         err "无法获取远程版本（网络异常）"
         echo; pause; return 1

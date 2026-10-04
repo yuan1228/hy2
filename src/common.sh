@@ -404,6 +404,15 @@ github_latest_tag() {
     local repo="$1" tag
     tag="$(curl -fsSL --max-time 20 "https://api.github.com/repos/${repo}/releases/latest" \
         | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)"
+    if [[ "$tag" =~ ^v?[0-9] ]]; then
+        printf '%s' "$tag"
+        return 0
+    fi
+    # API 不可达时（如纯 IPv6 小鸡连不上 api.github.com），改从 releases/latest
+    # 的跳转地址解析版本；github.com 主站一般可达，不影响原有 IPv4 逻辑
+    tag="$(curl -fsSL -o /dev/null -w '%{url_effective}' --max-time 20 \
+        "https://github.com/${repo}/releases/latest" 2>/dev/null \
+        | sed -n 's|.*/releases/tag/||p' | cut -d'?' -f1 | cut -d'#' -f1 | head -1)"
     [[ "$tag" =~ ^v?[0-9] ]] || return 1
     printf '%s' "$tag"
 }
