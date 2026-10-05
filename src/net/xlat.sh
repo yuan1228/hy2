@@ -5,16 +5,24 @@
 # 架构：DNS64 + NAT64(PLAT) + CLAT(clatd)
 # ============================================================
 
-# 464XLAT 配置（外部 PLAT + 备选）
+# 464XLAT 配置（4 路 PLAT 自动故障切换）
+# 格式：名称|DNS64|PLAT前缀|测试IP(8.8.8.8经PLAT翻译)
+XLAT_PROVIDERS=(
+  "nat64.net|2a00:1098:2b::1|2a00:1098:2b:0:0:1::/96|2a00:1098:2b:0:0:1:808:808"
+  "trex1|2001:67c:2b0::4|2001:67c:2b0:db32:0:1::/96|2001:67c:2b0:db32:0:1:808:808"
+  "trex2|2001:67c:2b0::6|2001:67c:2b0:db32::/96|2001:67c:2b0:db32:0:808:808"
+  "level66|2001:67c:2960::64|2001:67c:2960:6464::/96|2001:67c:2960:6464::808:808"
+)
+# 兼容旧变量名（默认用第一个）
 XLAT_DNS64_PRIMARY="2a00:1098:2b::1"
 XLAT_PLAT_PRIMARY="2a00:1098:2b:0:0:1::/96"
-XLAT_DNS64_BACKUP1="2001:67c:2b0::4"      # Trex 芬兰
-XLAT_PLAT_BACKUP1="2001:67c:2b0:db32:0:1::/96"
-XLAT_DNS64_BACKUP2="2001:67c:2960::64"    # level66 德国
-XLAT_PLAT_BACKUP2="2001:67c:2960:6464::/96"
 
 XLAT_RESOLV_BAK="/tmp/resolv.conf.xlat.bak"
 XLAT_CLAT_CONF="/etc/clatd.conf"
+XLAT_FAILOVER_SCRIPT="/usr/local/bin/nat64-failover.sh"
+XLAT_FAILOVER_STATE="/var/run/nat64-current"
+XLAT_FAILOVER_LOG="/var/log/nat64-failover.log"
+XLAT_FAILOVER_CRON="/etc/cron.d/nat64-failover"
 
 # 检测是否为纯 IPv6 环境（无 IPv4 地址、无 IPv4 默认路由）
 is_ipv6_only() {
@@ -28,6 +36,82 @@ is_ipv6_only() {
 # 检测 464XLAT 是否运行中
 xlat_running() {
     pgrep -f "clatd" >/dev/null 2>&1 && ip link show clat >/dev/null 2>&1
+}
+
+# 安装 NAT64 自动故障切换（每5分钟检测，故障自动切下一个）
+xlat_failover_install() {
+    cat > "$XLAT_FAILOVER_SCRIPT" << 'FOEOF'
+#!/bin/bash
+# NAT64/PLAT 自动故障切换（由 yuan 工具箱安装）
+LOG="/var/log/nat64-failover.log"
+STATE="/var/run/nat64-current"
+PROVIDERS=(
+  "nat64.net|2a00:1098:2b::1|2a00:1098:2b:0:0:1::/96|2a00:1098:2b:0:0:1:808:808"
+  "trex1|2001:67c:2b0::4|2001:67c:2b0:db32:0:1::/96|2001:67c:2b0:db32:0:1:808:808"
+  "trex2|2001:67c:2b0::6|2001:67c:2b0:db32::/96|2001:67c:2b0:db32:0:808:808"
+  "level66|2001:67c:2960::64|2001:67c:2960:6464::/96|2001:67c:2960:6464::808:808"
+)
+log() { echo "[$(date '+%F %T')] $1" | tee -a "$LOG"; }
+current_idx=0
+[ -f "$STATE" ] && current_idx=$(cat "$STATE")
+test_plat() { ping -6 -c 3 -W 2 "$1" >/dev/null 2>&1; }
+switch_to() {
+  local idx=$1
+  IFS='|' read -r name dns64 prefix testip <<< "${PROVIDERS[$idx]}"
+  log "切换到 $name (DNS64=$dns64, PLAT=$prefix)"
+  printf 'nameserver %s\n' "$dns64" > /etc/resolv.conf
+  printf 'plat-prefix=%s\n' "$prefix" > /etc/clatd.conf
+  pkill -f clatd; sleep 2
+  setsid clatd >/tmp/clatd.log 2>&1 &
+  sleep 3
+  ip link set clat mtu 1280 2>/dev/null
+  if test_plat "$testip"; then
+    echo "$idx" > "$STATE"
+    log "切换成功，$name 工作正常"
+    return 0
+  else
+    log "切换后 $name 仍不可用"
+    return 1
+  fi
+}
+IFS='|' read -r cur_name cur_dns cur_prefix cur_testip <<< "${PROVIDERS[$current_idx]}"
+log "检测当前 PLAT ($cur_name)..."
+if test_plat "$cur_testip"; then
+  log "当前 PLAT 正常，无需切换"
+  exit 0
+fi
+log "当前 PLAT ($cur_name) 故障，开始故障切换..."
+for i in 0 1 2 3; do
+  [ "$i" -eq "$current_idx" ] && continue
+  IFS='|' read -r name dns64 prefix testip <<< "${PROVIDERS[$i]}"
+  log "尝试 $name..."
+  if test_plat "$testip"; then
+    switch_to "$i" && exit 0
+  else
+    log "$name 的 PLAT 也不可达，跳过"
+  fi
+done
+log "所有 PLAT 均不可用！"
+exit 1
+FOEOF
+    chmod +x "$XLAT_FAILOVER_SCRIPT"
+    echo "*/5 * * * * root $XLAT_FAILOVER_SCRIPT" > "$XLAT_FAILOVER_CRON"
+    echo "0" > "$XLAT_FAILOVER_STATE" 2>/dev/null
+    dim "已安装 PLAT 自动故障切换（每5分钟检测）"
+}
+
+# 卸载 NAT64 自动故障切换
+xlat_failover_remove() {
+    rm -f "$XLAT_FAILOVER_SCRIPT" "$XLAT_FAILOVER_CRON" "$XLAT_FAILOVER_STATE"
+    dim "已卸载 PLAT 自动故障切换"
+}
+
+# 查看当前使用的 PLAT
+xlat_current_provider() {
+    local idx=0
+    [[ -f "$XLAT_FAILOVER_STATE" ]] && idx=$(cat "$XLAT_FAILOVER_STATE" 2>/dev/null)
+    IFS='|' read -r name dns64 prefix testip <<< "${XLAT_PROVIDERS[$idx]}"
+    echo "$name"
 }
 
 # 启动 464XLAT
@@ -87,9 +171,12 @@ SVCEOF
     systemctl daemon-reload 2>/dev/null
     systemctl enable clatd 2>/dev/null
     dim "已设置开机自启"
-    
+
+    # 8. 安装 PLAT 自动故障切换
+    xlat_failover_install
+
     if xlat_running; then
-        ok "464XLAT 启动成功（已设开机自启）"
+        ok "464XLAT 启动成功（已设开机自启 + PLAT自动切换）"
         return 0
     else
         err "464XLAT 启动失败，请查看 /tmp/clatd.log"
@@ -104,6 +191,7 @@ xlat_stop() {
     systemctl disable clatd 2>/dev/null
     pkill -f clatd 2>/dev/null
     pkill -f tayga 2>/dev/null
+    xlat_failover_remove
     # 恢复 DNS
     if [[ -f "$XLAT_RESOLV_BAK" ]]; then
         cp "$XLAT_RESOLV_BAK" /etc/resolv.conf
@@ -131,6 +219,7 @@ xlat_purge() {
     apt-get remove -y -qq clatd tayga 2>/dev/null
     rm -f "$XLAT_CLAT_CONF" /etc/tayga.conf
     rm -f /tmp/clatd.log "$XLAT_RESOLV_BAK"
+    rm -f "$XLAT_FAILOVER_LOG"
     ok "464XLAT 已彻底清理，无残留"
 }
 
@@ -179,23 +268,28 @@ xlat_menu() {
         echo "    - 不需要时可随时停止/清理，不留残留"
         echo ""
         if xlat_running; then
-            echo "  当前状态：运行中"
+            echo "  当前状态：运行中（当前 PLAT：$(xlat_current_provider)）"
         else
             echo "  当前状态：未运行"
         fi
+        if [[ -f "$XLAT_FAILOVER_CRON" ]]; then
+            echo "  故障切换：已启用（每5分钟检测，4路自动切换）"
+        fi
         echo ""
-        echo "1. 启动 464XLAT（含 DNS64+NAT64+CLAT）"
+        echo "1. 启动 464XLAT（含 DNS64+NAT64+CLAT+自动切换）"
         echo "2. 停止 464XLAT"
         echo "3. 删除清理 464XLAT（彻底卸载）"
         echo "4. 查看状态 + 连通性测试"
+        echo "5. 查看故障切换日志"
         echo "0. 返回主菜单"
         echo ""
-        read -rp "请选择 [0-4]: " choice
+        read -rp "请选择 [0-5]: " choice
         case "$choice" in
             1) xlat_start; read -rp "按任意键继续..." -n1 ;;
             2) xlat_stop; read -rp "按任意键继续..." -n1 ;;
             3) xlat_purge; read -rp "按任意键继续..." -n1 ;;
             4) xlat_status; read -rp "按任意键继续..." -n1 ;;
+            5) tail -30 "$XLAT_FAILOVER_LOG" 2>/dev/null || warn "暂无切换日志"; read -rp "按任意键继续..." -n1 ;;
             0) return ;;
             *) warn "无效选择" ;;
         esac
