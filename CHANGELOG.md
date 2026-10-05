@@ -128,3 +128,11 @@
 ## v1.x
 
 - 单文件 `install.sh`，仅支持 Hysteria2
+
+## v3.5.0 (2026-10-05)
+- 新增【464XLAT 管理】子菜单（主菜单 6）：启动/停止/删除清理/状态+连通性测试
+- 464XLAT 架构：DNS64 + NAT64(PLAT) + CLAT(clatd)，纯 IPv6 VPS 访问 IPv4 全方案
+- 内置 3 个公共 PLAT 备选：nat64.net、Trex(芬兰x2)、level66(德国)，自动故障切换
+- HY2 服务端默认监听 [::]，QUIC 参数优化适配 MTU=1280
+- 修复纯 IPv6 环境下载/更新失败：经临时 NAT64 拉取，自动复用本机 464XLAT
+- 新增 IPv6 环境检测函数 is_ipv6_only()

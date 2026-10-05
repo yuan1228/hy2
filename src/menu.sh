@@ -29,6 +29,7 @@ load_modules() {
     source "$YUAN_ROOT/src/system/security.sh"
     source "$YUAN_ROOT/src/system/pkgs.sh"
     source "$YUAN_ROOT/src/net/warp.sh"
+    source "$YUAN_ROOT/src/net/xlat.sh"
     source "$YUAN_ROOT/src/net/tcpquality.sh"
     source "$YUAN_ROOT/src/net/nodequality.sh"
     source "$YUAN_ROOT/src/update.sh"
@@ -77,17 +78,17 @@ draw_menu() {
     echo -e " ${C_BLD}节点搭建${C_RST}"
     echo -e " ${C_GRN} 1. Hysteria2 管理         2. VLESS+REALITY 管理${C_RST}"
     echo -e " ${C_GRN} 3. Trojan 管理            4. Shadowsocks 管理${C_RST}"
-    echo -e " ${C_GRN} 5. WARP 管理${C_RST}"
+    echo -e " ${C_GRN} 5. WARP 管理              6. 464XLAT 管理${C_RST}"
     echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
     echo -e " ${C_BLD}系统工具${C_RST}"
-    echo -e " ${C_GRN} 6. 本机信息               7. 系统更新${C_RST}"
-    echo -e " ${C_GRN} 8. 系统清理               9. BBR / 网络调优${C_RST}"
-    echo -e " ${C_GRN}10. 防火墙管理            11. 安全检查${C_RST}"
-    echo -e " ${C_GRN}12. 常用组件安装          13. 全部节点链接${C_RST}"
+    echo -e " ${C_GRN} 7. 本机信息               8. 系统更新${C_RST}"
+    echo -e " ${C_GRN} 9. 系统清理              10. BBR / 网络调优${C_RST}"
+    echo -e " ${C_GRN}11. 防火墙管理            12. 安全检查${C_RST}"
+    echo -e " ${C_GRN}13. 常用组件安装          14. 全部节点链接${C_RST}"
     echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
     echo -e " ${C_BLD}网络测试${C_RST} ${C_DIM}(每次运行前自动检查上游更新)${C_RST}"
-    echo -e " ${C_GRN}14. TcpQuality${C_RST} ${C_DIM}TCP 三网质量检测${C_RST}"
-    echo -e " ${C_GRN}15. NodeQuality${C_RST} ${C_DIM}综合体检：性能+IP质量+网络质量${C_RST}"
+    echo -e " ${C_GRN}15. TcpQuality${C_RST} ${C_DIM}TCP 三网质量检测${C_RST}"
+    echo -e " ${C_GRN}16. NodeQuality${C_RST} ${C_DIM}综合体检：性能+IP质量+网络质量${C_RST}"
     echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
     echo -e " ${C_YLW}00. 检查更新${C_RST}              ${C_RED}88. 退出${C_RST}"
     echo -e "${C_BLD}============================================================${C_RST}"
@@ -175,16 +176,17 @@ main_menu() {
         case "$c" in
             1|2|3|4) proto_menu "${PROTOS[$((c-1))]}" ;;
             5)  warp_menu ;;
-            6)  sys_info ;;
-            7)  sys_update ;;
-            8)  sys_clean ;;
-            9)  tuning_menu ;;
-            10) fw_menu ;;
-            11) sec_run ;;
-            12) pkgs_menu ;;
-            13) show_all_links ;;
-            14) net_tcpquality ;;
-            15) net_nodequality ;;
+            6)  xlat_menu ;;
+            7)  sys_info ;;
+            8)  sys_update ;;
+            9)  sys_clean ;;
+            10) tuning_menu ;;
+            11) fw_menu ;;
+            12) sec_run ;;
+            13) pkgs_menu ;;
+            14) show_all_links ;;
+            15) net_tcpquality ;;
+            16) net_nodequality ;;
             00) update_panel ;;
             88) echo "再见！"; exit 0 ;;
             *) warn "无效选项"; sleep 1 ;;

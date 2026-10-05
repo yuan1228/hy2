@@ -369,7 +369,18 @@ hy2_deploy() {
 
     step "[4/6] 写入配置文件…"
     cat > "$HY2_DIR/config.yaml" <<EOF
-listen: :$port
+# 监听 IPv6 [::]，兼容纯 IPv6 环境
+listen: [::]:$port
+
+# QUIC 参数优化（适配 MTU=1280 的 464XLAT/CLAT 网络）
+quic:
+  initStreamReceiveWindow: 8388608
+  maxStreamReceiveWindow: 8388608
+  initConnReceiveWindow: 20971520
+  maxConnReceiveWindow: 20971520
+  maxIdleTimeout: 30s
+  maxIncomingStreams: 1024
+  disablePathMTUDiscovery: true
 
 tls:
   cert: $HY2_DIR/server.crt
@@ -389,6 +400,11 @@ masquerade:
   proxy:
     url: https://$sni
     rewriteHost: true
+
+# 出站经本机 464XLAT 访问 IPv4（纯 IPv6 环境自动生效）
+outbounds:
+  - name: direct
+    type: direct
 
 ignoreClientBandwidth: true
 EOF
