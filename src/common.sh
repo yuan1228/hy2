@@ -401,23 +401,38 @@ svc_logs_follow() {
 # 用法：nat64_fetch <url> <输出文件>；成功返回 0
 nat64_fetch() {
     local url="$1" out="$2"
-    local resolv_bak="" dns64="2a00:1098:2b::1"
-    # 备份 resolv.conf
-    if [[ -f /etc/resolv.conf ]]; then
-        resolv_bak="$(mktemp)"
-        cp /etc/resolv.conf "$resolv_bak"
-    fi
-    # 临时换 DNS64
-    printf 'nameserver %s\n' "$dns64" > /etc/resolv.conf 2>/dev/null
-    local rc=1
-    if curl -fsSL --max-time 120 --retry 2 "$url" -o "$out" 2>/dev/null; then
-        rc=0
-    fi
-    # 恢复 resolv.conf，不留残留
-    if [[ -n "$resolv_bak" && -f "$resolv_bak" ]]; then
-        cat "$resolv_bak" > /etc/resolv.conf 2>/dev/null
-        rm -f "$resolv_bak"
-    fi
+    local dns64_list="2a00:1098:2b::1 2001:67c:2b0::4 2001:67c:2960::64"
+    local rc=1 tmpdir
+    tmpdir="$(mktemp -d)"
+    local i=0
+    # 并行抢跑：3 个 DNS64 同时下载，谁先成功用谁的
+    # --dns-servers 直接指定 DNS，不碰 /etc/resolv.conf，无残留
+    for dns64 in $dns64_list; do
+        i=$((i+1))
+        (
+            if curl -fsSL --dns-servers "$dns64" \
+                --connect-timeout 8 --max-time 40 \
+                "$url" -o "$tmpdir/out.$i" 2>/dev/null; then
+                touch "$tmpdir/done.$i"
+            fi
+        ) &
+    done
+    # 等待任意一个成功，最多 45 秒
+    local waited=0
+    while [[ $waited -lt 45 ]]; do
+        for j in $(seq 1 $i); do
+            if [[ -f "$tmpdir/done.$j" ]]; then
+                cp "$tmpdir/out.$j" "$out" 2>/dev/null
+                rc=0
+                break 2
+            fi
+        done
+        sleep 1
+        waited=$((waited+1))
+    done
+    kill $(jobs -p) 2>/dev/null
+    wait 2>/dev/null
+    rm -rf "$tmpdir"
     return $rc
 }
 

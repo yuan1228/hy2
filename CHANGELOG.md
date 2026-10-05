@@ -136,3 +136,8 @@
 - HY2 服务端默认监听 [::]，QUIC 参数优化适配 MTU=1280
 - 修复纯 IPv6 环境下载/更新失败：经临时 NAT64 拉取，自动复用本机 464XLAT
 - 新增 IPv6 环境检测函数 is_ipv6_only()
+
+## v3.5.2 (2026-10-05)
+- nat64_fetch 改为 3 个 DNS64 并行抢跑，最快 10 秒内完成
+- 用 curl --dns-servers 直连，不再改写 /etc/resolv.conf，零残留
+- 单 DNS 超时 8 秒，总等待上限 45 秒
