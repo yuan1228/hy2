@@ -65,9 +65,31 @@ xlat_start() {
     
     # 6. 设置 MTU
     ip link set clat mtu 1280 2>/dev/null
+
+    # 7. 创建 systemd 开机自启服务
+    cat > /etc/systemd/system/clatd.service << 'SVCEOF'
+[Unit]
+Description=464XLAT CLAT daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/clatd
+ExecStartPost=/bin/sleep 2
+ExecStartPost=/sbin/ip link set clat mtu 1280
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+    systemctl daemon-reload 2>/dev/null
+    systemctl enable clatd 2>/dev/null
+    dim "已设置开机自启"
     
     if xlat_running; then
-        ok "464XLAT 启动成功"
+        ok "464XLAT 启动成功（已设开机自启）"
         return 0
     else
         err "464XLAT 启动失败，请查看 /tmp/clatd.log"
@@ -78,6 +100,8 @@ xlat_start() {
 # 停止 464XLAT
 xlat_stop() {
     step "停止 464XLAT..."
+    systemctl stop clatd 2>/dev/null
+    systemctl disable clatd 2>/dev/null
     pkill -f clatd 2>/dev/null
     pkill -f tayga 2>/dev/null
     # 恢复 DNS
@@ -85,15 +109,19 @@ xlat_stop() {
         cp "$XLAT_RESOLV_BAK" /etc/resolv.conf
         dim "resolv.conf 已恢复"
     fi
-    ok "464XLAT 已停止"
+    ok "464XLAT 已停止（开机自启已关闭）"
 }
 
 # 删除清理 464XLAT（彻底卸载）
 xlat_purge() {
     step "彻底清理 464XLAT..."
     xlat_stop
+    # 删除 systemd 服务
+    rm -f /etc/systemd/system/clatd.service
+    systemctl daemon-reload 2>/dev/null
     # 删除网卡
     ip link set clat down 2>/dev/null
+    ip link delete clat 2>/dev/null
     # 删除路由残留
     ip route del default dev clat 2>/dev/null
     # 清理 nft
