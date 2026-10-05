@@ -26,7 +26,7 @@ trojan_load_old() {
     [[ -f "$TROJAN_LINK" ]] && link="$(cat "$TROJAN_LINK")"
     [[ -z "$link" ]] && return 0
     TROJAN_OLD_PASS="$(printf '%s' "$link" | sed -n 's|^trojan://\([^@]*\)@.*|\1|p')"
-    TROJAN_OLD_PORT="$(printf '%s' "$link" | sed -n 's|^trojan://[^@]*@[^:]*:\([0-9]\{1,5\}\)?.*|\1|p')"
+    TROJAN_OLD_PORT="$(url_port "$link")"
     TROJAN_OLD_SNI="$(printf '%s' "$link" | sed -n 's|.*[?&]sni=\([^&#]*\).*|\1|p')"
     TROJAN_OLD_PASS="$(urldecode "$TROJAN_OLD_PASS")"
 }
@@ -58,7 +58,7 @@ trojan_deploy() {
   "inbounds": [
     {
       "port": $port,
-      "listen": "::",
+      "listen": "$(xray_listen)",
       "protocol": "trojan",
       "settings": {
         "clients": [ { "password": "$pass" } ]
@@ -137,6 +137,8 @@ trojan_logs() {
 
 trojan_uninstall() {
     confirm "确定彻底卸载 Trojan 吗？配置与证书将全部删除" || return 0
+    step "清理防火墙规则…"
+    fw_remove "$(trojan_port)" tcp 2>/dev/null
     step "停止并移除服务…"
     svc_uninstall "$TROJAN_SVC"
     step "删除配置…"

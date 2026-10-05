@@ -50,6 +50,43 @@ fw_proto_list() {
     esac
 }
 
+# 删除防火墙放行规则（与 fw_allow 对称，用于卸载时清理）
+fw_remove() {
+    local port="$1" proto="${2:-both}" be
+    valid_port "$port" || return 1
+    be="$(fw_backend)"
+    case "$be" in
+        nft)
+            for p in $(fw_proto_list "$proto"); do
+                # 删除所有匹配该端口/协议的 accept 规则
+                while true; do
+                    local handle
+                    handle="$(nft --handle list chain inet yuan input 2>/dev/null \
+                        | grep -E "$p dport $port .* accept" | grep -oE "handle [0-9]+" | head -1 | awk '{print $2}')"
+                    [[ -n "$handle" ]] || break
+                    nft delete rule inet yuan input handle "$handle" 2>/dev/null || break
+                done
+            done
+            fw_nft_save
+            ;;
+        iptables)
+            for p in $(fw_proto_list "$proto"); do
+                while iptables -C INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null; do
+                    iptables -D INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null || break
+                done
+                if command -v ip6tables >/dev/null 2>&1; then
+                    while ip6tables -C INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null; do
+                        ip6tables -D INPUT -p "$p" --dport "$port" -j ACCEPT 2>/dev/null || break
+                    done
+                fi
+            done
+            fw_ipt_save
+            ;;
+        none)
+            return 1 ;;
+    esac
+}
+
 # nft 初始化：建表建链，默认策略为“已部署端口放行”
 fw_nft_init() {
     nft create table inet yuan 2>/dev/null

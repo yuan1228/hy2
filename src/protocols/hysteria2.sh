@@ -30,7 +30,7 @@ hy2_load_old() {
     [[ -z "$link" && -f "$HY2_LEGACY_LINK" ]] && link="$(cat "$HY2_LEGACY_LINK")"
     [[ -z "$link" ]] && return 0
     HY2_OLD_PASS="$(printf '%s' "$link" | sed -n 's|^hysteria2://\([^@]*\)@.*|\1|p')"
-    HY2_OLD_PORT="$(printf '%s' "$link" | sed -n 's|^hysteria2://[^@]*@[^:]*:\([0-9]\{1,5\}\)/?.*|\1|p')"
+    HY2_OLD_PORT="$(url_port "$link")"
     HY2_OLD_SNI="$(printf '%s' "$link" | sed -n 's|.*[?&]sni=\([^&#]*\).*|\1|p')"
     HY2_OLD_OBFS="$(printf '%s' "$link" | sed -n 's|.*[?&]obfs-password=\([^&#]*\).*|\1|p')"
     HY2_OLD_MPORT="$(printf '%s' "$link" | sed -n 's|.*[?&]mport=\([^&#]*\).*|\1|p')"
@@ -80,7 +80,7 @@ hy2_ensure_bin() {
                 esac
                 if [[ -n "$_n64_arch" ]]; then
                     _n64_ver="${HY2_VER:-v2.12.3}"
-                    _n64_url="https://github.com/apernet/hysteria/releases/download/${_n64_ver}/hysteria-linux-${_n64_arch}"
+                    _n64_url="https://github.com/apernet/hysteria/releases/download/app/${_n64_ver}/hysteria-linux-${_n64_arch}"
                     dim "纯 IPv6，临时经 NAT64 下载 hysteria…"
                     if nat64_fetch "$_n64_url" "$HY2_BIN" 2>/dev/null; then
                         chmod +x "$HY2_BIN"
@@ -293,7 +293,6 @@ hy2_remove_hop() {
             mkdir -p /etc/nftables.d
             nft list table ip yuan_nat > /etc/nftables.d/yuan_nat.nft 2>/dev/null
             nft list table ip6 yuan_nat6 > /etc/nftables.d/yuan_nat6.nft 2>/dev/null
-            nft list table ip6 yuan_nat6 > /etc/nftables.d/yuan_nat6.nft 2>/dev/null
             ;;
     esac
     rm -f "$HY2_HOP_CONF"
@@ -369,7 +368,7 @@ hy2_deploy() {
 
     step "[4/6] 写入配置文件…"
     cat > "$HY2_DIR/config.yaml" <<EOF
-listen: "[::]:$port"
+listen: "$(listen_addr):$port"
 
 quic:
   initStreamReceiveWindow: 8388608
@@ -500,6 +499,8 @@ hy2_uninstall() {
     confirm "确定彻底卸载 Hysteria2 吗？配置与证书将全部删除" || return 0
     step "移除端口跳跃规则…"
     hy2_remove_hop 2>/dev/null
+    step "清理防火墙规则…"
+    fw_remove "$(hy2_port)" udp 2>/dev/null
     step "停止并移除服务…"
     svc_uninstall "$HY2_SVC"
     step "删除程序与配置…"

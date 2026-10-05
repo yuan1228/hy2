@@ -156,7 +156,8 @@ b64url() { printf '%s' "$1" | base64 -w0 | tr '+/' '-_' | tr -d '='; }
 # ---------------- 网络 ----------------
 # 检查是否有真实 IPv4（排除 clat 翻译接口）
 has_real_ipv4() {
-    ip -4 addr show scope global 2>/dev/null | grep -v "clat" | grep -q "inet "
+    # 排除 CLAT 接口：clatd 固定用 192.0.0.1/29（RFC 7335），按地址段判断比接口名可靠
+    ip -4 addr show scope global 2>/dev/null | grep "inet " | grep -vq "192\.0\.0\."
 }
 
 # 获取公网 IPv4（失败返回空）
@@ -164,15 +165,22 @@ has_real_ipv4() {
 get_ipv4() {
     # 没有真实 IPv4 地址时直接返回空，避免拿到 NAT64 网关 IP
     has_real_ipv4 || return 1
-    curl -4s --max-time 8 https://ipv4.icanhazip.com 2>/dev/null \
-    || curl -4s --max-time 8 https://ip.sb 2>/dev/null \
-    || curl -4s --max-time 8 https://ifconfig.me 2>/dev/null | tr -d '[:space:]'
+    local iface_opt=""
+    # 双栈+464XLAT 同时开时，默认 v4 路由可能走 clat，需绑定真实 v4 地址
+    if ip -4 route show default 2>/dev/null | grep -q "dev clat"; then
+        local real_ip
+        real_ip="$(ip -4 addr show scope global 2>/dev/null | grep "inet " | grep -v "192\.0\.0\." | grep -oE "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | head -1)"
+        [[ -n "$real_ip" ]] && iface_opt="--interface $real_ip"
+    fi
+    { curl $iface_opt -4s --max-time 8 https://ipv4.icanhazip.com 2>/dev/null \
+    || curl $iface_opt -4s --max-time 8 https://ip.sb 2>/dev/null \
+    || curl $iface_opt -4s --max-time 8 https://ifconfig.me 2>/dev/null; } | tr -d '[:space:]'
 }
 
 # 获取公网 IPv6（失败返回空）
 get_ipv6() {
-    curl -6s --max-time 8 https://ipv6.icanhazip.com 2>/dev/null \
-    || curl -6s --max-time 8 https://ip.sb 2>/dev/null | tr -d '[:space:]'
+    { curl -6s --max-time 8 https://ipv6.icanhazip.com 2>/dev/null \
+    || curl -6s --max-time 8 https://ip.sb 2>/dev/null; } | tr -d '[:space:]'
 }
 
 # 优先 v4，没有 v4 则用 [v6]
@@ -410,37 +418,21 @@ svc_logs_follow() {
 nat64_fetch() {
     local url="$1" out="$2"
     local dns64_list="2a00:1098:2b::1 2001:67c:2b0::4 2001:67c:2960::64"
-    local rc=1 tmpdir
-    tmpdir="$(mktemp -d)"
-    local i=0
-    # 并行抢跑：3 个 DNS64 同时下载，谁先成功用谁的
-    # --dns-servers 直接指定 DNS，不碰 /etc/resolv.conf，无残留
+    local rc=1 resolv_bak
+    resolv_bak="$(mktemp)"
+    # 备份 resolv.conf（Debian curl 不支持 --dns-servers，只能临时改写）
+    cp /etc/resolv.conf "$resolv_bak" 2>/dev/null
+    # 逐个尝试 DNS64，串行避免竞态
     for dns64 in $dns64_list; do
-        i=$((i+1))
-        (
-            if curl -fsSL --dns-servers "$dns64" \
-                --connect-timeout 8 --max-time 40 \
-                "$url" -o "$tmpdir/out.$i" 2>/dev/null; then
-                touch "$tmpdir/done.$i"
-            fi
-        ) &
+        printf 'nameserver %s\n' "$dns64" > /etc/resolv.conf
+        if curl -fsSL --connect-timeout 8 --max-time 30 "$url" -o "$out" 2>/dev/null; then
+            rc=0
+            break
+        fi
     done
-    # 等待任意一个成功，最多 45 秒
-    local waited=0
-    while [[ $waited -lt 45 ]]; do
-        for j in $(seq 1 $i); do
-            if [[ -f "$tmpdir/done.$j" ]]; then
-                cp "$tmpdir/out.$j" "$out" 2>/dev/null
-                rc=0
-                break 2
-            fi
-        done
-        sleep 1
-        waited=$((waited+1))
-    done
-    kill $(jobs -p) 2>/dev/null
-    wait 2>/dev/null
-    rm -rf "$tmpdir"
+    # 恢复 resolv.conf
+    cp "$resolv_bak" /etc/resolv.conf 2>/dev/null
+    rm -f "$resolv_bak"
     return $rc
 }
 
@@ -480,13 +472,12 @@ geo_cc() {
     local cc=""
     local curl_v=""
     # 纯 IPv6 机器强制走 IPv6 查，避免经 NAT64 拿到网关所在国的国码
-    # （直接内联检测，避免依赖 xlat.sh 的加载顺序）
-    if ! ip -4 addr show scope global 2>/dev/null | grep -v "clat" | grep -q "inet "; then
+    if ! has_real_ipv4; then
         curl_v="-6"
     fi
     # 首选 ip.sb（权威，IPv6 库准）
     cc="$(curl $curl_v -s --max-time 8 "https://api.ip.sb/geoip" 2>/dev/null \
-        | grep -o '"country_code":"[A-Z]*"' | head -1 | cut -d'"' -f4 | tr -d '[:space:]')"
+        | grep -oE '"country_code"[[:space:]]*:[[:space:]]*"[A-Z]+"' | head -1 | cut -d'"' -f4 | tr -d '[:space:]')"
     # 备选 ip-api.com
     if [[ -z "$cc" ]]; then
         cc="$(curl $curl_v -s --max-time 8 "http://ip-api.com/line/?fields=countryCode" 2>/dev/null \
@@ -540,4 +531,39 @@ net_tool_run() {
     info "正在运行 $name…"
     echo
     bash "$cache" "$@"
+}
+
+# 从节点链接中提取端口（支持 IPv6 中括号地址）
+# 用法：url_port "hysteria2://pass@[2001:db8::1]:48978?..." → 48978
+url_port() {
+    local url="$1" host_port
+    # 取 @ 之后、?/# 之前的部分
+    host_port="$(printf '%s' "$url" | sed -n 's|.*@\([^?#]*\).*|\1|p')"
+    # 如果是 [ipv6]:port 格式
+    if [[ "$host_port" =~ ^\[.*\]:([0-9]+) ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    # 普通 host:port 格式
+    elif [[ "$host_port" =~ :([0-9]+) ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    fi
+}
+
+# 监听地址：IPv6 可用时用 [::]（双栈），内核禁用 IPv6 时回退 0.0.0.0
+# 用法：listen_addr → "[::]" 或 "0.0.0.0"
+listen_addr() {
+    if [[ -d /proc/net/if_inet6 ]]; then
+        printf '[::]'
+    else
+        printf '0.0.0.0'
+    fi
+}
+
+# Xray 的 listen 字段格式（不带中括号）
+# 用法：xray_listen → "::" 或 "0.0.0.0"
+xray_listen() {
+    if [[ -d /proc/net/if_inet6 ]]; then
+        printf '::'
+    else
+        printf '0.0.0.0'
+    fi
 }

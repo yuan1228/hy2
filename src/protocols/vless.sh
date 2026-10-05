@@ -28,7 +28,7 @@ vless_load_old() {
     local link=""
     [[ -f "$VLESS_LINK" ]] && link="$(cat "$VLESS_LINK")"
     [[ -z "$link" ]] && return 0
-    VLESS_OLD_PORT="$(printf '%s' "$link" | sed -n 's|^vless://[^@]*@[^:]*:\([0-9]\{1,5\}\)?.*|\1|p')"
+    VLESS_OLD_PORT="$(url_port "$link")"
     VLESS_OLD_SNI="$(printf '%s' "$link" | sed -n 's|.*[?&]sni=\([^&#]*\).*|\1|p')"
 }
 
@@ -67,7 +67,7 @@ vless_deploy() {
   "inbounds": [
     {
       "port": $port,
-      "listen": "::",
+      "listen": "$(xray_listen)",
       "protocol": "vless",
       "settings": {
         "clients": [ { "id": "$uuid", "flow": "xtls-rprx-vision" } ],
@@ -147,6 +147,8 @@ vless_logs() {
 
 vless_uninstall() {
     confirm "确定彻底卸载 VLESS + REALITY 吗？配置与密钥将全部删除" || return 0
+    step "清理防火墙规则…"
+    fw_remove "$(vless_port)" tcp 2>/dev/null
     step "停止并移除服务…"
     svc_uninstall "$VLESS_SVC"
     step "删除配置…"

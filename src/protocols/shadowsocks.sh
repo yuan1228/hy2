@@ -50,7 +50,7 @@ ss_ensure_bin() {
     fi
 
     step "下载 ssserver $ver…"
-    url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${ver}/shadowsocks-${ver#v}.${arch_dl}.tar.xz"
+    url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${ver}/shadowsocks-${ver}.${arch_dl}.tar.xz"
     tmpdir="$(mktemp -d)"
     if ! curl -fsSL --max-time 120 --retry 2 "$url" -o "$tmpdir/ss.tar.xz"; then
         rm -rf "$tmpdir"
@@ -87,7 +87,7 @@ ss_load_old() {
     local link=""
     [[ -f "$SS_LINK" ]] && link="$(cat "$SS_LINK")"
     [[ -z "$link" ]] && return 0
-    SS_OLD_PORT="$(printf '%s' "$link" | sed -n 's|^ss://[^@]*@[^:]*:\([0-9]\{1,5\}\)#.*|\1|p')"
+    SS_OLD_PORT="$(url_port "$link")"
     # 密码从 base64 的 userinfo 中解析
     local ui
     ui="$(printf '%s' "$link" | sed -n 's|^ss://\([^@]*\)@.*|\1|p' | tr '_-' '/+' )"
@@ -114,7 +114,7 @@ ss_deploy() {
     ensure_dir "$SS_DIR"
     cat > "$SS_DIR/config.json" <<EOF
 {
-    "server": "::",
+    "server": "$(xray_listen)",
     "server_port": $port,
     "password": "$pass",
     "method": "$SS_METHOD",
@@ -183,10 +183,13 @@ ss_logs() {
 
 ss_uninstall() {
     confirm "确定彻底卸载 Shadowsocks 吗？配置将全部删除" || return 0
+    step "清理防火墙规则…"
+    fw_remove "$(ss_port)" tcp 2>/dev/null
     step "停止并移除服务…"
     svc_uninstall "$SS_SVC"
-    step "删除配置…"
+    step "删除程序与配置…"
     rm -rf "$SS_DIR"
+    rm -f "$SS_BIN" "$SS_VER_FILE"
     ok "Shadowsocks 已彻底卸载"
     echo; pause
 }

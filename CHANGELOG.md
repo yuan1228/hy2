@@ -1,5 +1,41 @@
 # 更新日志
 
+## v3.6.5 (2026-10-05)
+
+**全面 bug 修复**（代码审查发现 33 个问题，巴黎机器实测验证）：
+
+**common.sh（6 个）：**
+- 修 bug：`nat64_fetch()` 删除不支持的 `curl --dns-servers`，改串行切换 DNS64 下载（Debian curl 不支持该选项，原函数必失败）
+- 修 bug：`geo_cc()` 支持带空格的 JSON 解析
+- 修 bug：`get_ipv4()/get_ipv6()` 管道修正，`tr -d` 作用于全部输出
+- 修 bug：`has_real_ipv4()` 改按 192.0.0.0/24 地址段排除 CLAT，不再依赖接口名
+- 修 bug：`get_ipv4()` 双栈+CLAT 时绑定真实 IPv4 地址，避免走 clat 默认路由拿到 NAT64 网关 IP
+- 新增 `url_port()`：从节点链接提取端口，支持 IPv6 中括号地址
+- 新增 `listen_addr()`/`xray_listen()`：内核禁用 IPv6 时监听地址自动回退到 0.0.0.0
+
+**四协议（9 个）：**
+- 修 bug：HY2 NAT64 下载 URL 补 `app/` 路径（原 URL 必 404）
+- 修 bug：四协议卸载清理防火墙规则（新增 `fw_remove()`，支持 nft/iptables/ip6tables）
+- 修 bug：HY2/VLESS/Trojan/SS 监听地址用 `listen_addr()`/`xray_listen()`，IPv4-only 内核禁用 v6 时不启动失败
+- 修 bug：四协议旧链接端口解析支持 IPv6 地址（`url_port()`）
+- 修 bug：Shadowsocks 卸载删除二进制和版本文件
+- 修 bug：HY2 nft 清理删除重复写文件行
+- 修 bug：Alpine 纯 IPv6 下 Shadowsocks 加 apk 兜底
+
+**xlat.sh（18 个，P0/P1 已修）：**
+- 修 bug：`ExecStartPre` 改调 `/usr/local/bin/clatd-dns.sh`，按当前 PLAT 前缀还原对应 DNS64（原硬编码 PRIMARY，failover 切换后重启必断网）
+- 修 bug：`xlat_write_dns()` 安全写入 DNS，先解除 `/etc/resolv.conf` 软链接（Debian 13 默认软链接，原写入静默失败）
+- 修 bug：failover `switch_to()` 改走 `systemctl restart clatd`，不再 pkill+setsid 绕过 systemd（原与 Restart=always 竞态，双 clatd 抢网卡）
+- 修 bug：非 systemd（Alpine/OpenRC）回退直接启动，不再静默失败
+- 修 bug：DNS 备份从 `/tmp` 移到 `/etc`，重启不丢失；`xlat_stop()` 备份丢失时清理 DNS64 残留
+- 修 bug：禁用无用的 tayga 服务（CLAT 不需要）
+- 修 bug：启动改轮询 20 秒 + 端到端连通验证，不再固定 sleep 5 误报
+- 修 bug：failover 健康检查加 DNS64 合成验证（`dig AAAA github.com @dns64`）
+- 修 bug：状态持久化到 `/etc/nat64-current`，重启不丢失；重装不重置已有状态
+- 修 bug：failover 日志超 1MB 自动轮转
+- 修 bug：`xlat_stop()` 用标记文件判断是否停用过 systemd-resolved
+- 修 bug：`xlat_current_provider()` 优先读持久化状态
+
 ## v3.6.4 (2026-10-05)
 
 **修复 464XLAT 重启后失效**（巴黎机器实测验证）：
@@ -24,8 +60,7 @@
 
 - **修 bug**：`github_latest_tag()` 加 jsDelivr 兜底（有 IPv6），取版本三路：
   GitHub API → github.com 跳转 → jsDelivr data API；IPv4 原逻辑不动
-- **修 bug**：Shadowsocks 下载失败时改走 `apt install shadowsocks-rust`
-  （Debian 官方源有 IPv6），纯 v6 机器可装上
+- **修 bug**：Shadowsocks 下载 URL 文件名修正（官方 asset 保留 `v` 前缀，如 `shadowsocks-v1.25.0...`，原代码用 `${ver#v}` 去掉 `v` 导致永远 404，SS 因此从未成功部署过）
 - **修 bug**：VLESS/Trojan 的 Xray inbound 加 `"listen": "::"`，
   原先默认只监听 IPv4，纯 v6 机器上客户端连不上
 - **修 bug**：Hysteria2 端口跳跃加 IPv6 规则（iptables→ip6tables，
