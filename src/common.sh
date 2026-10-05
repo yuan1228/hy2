@@ -154,8 +154,16 @@ urldecode() {
 b64url() { printf '%s' "$1" | base64 -w0 | tr '+/' '-_' | tr -d '='; }
 
 # ---------------- 网络 ----------------
+# 检查是否有真实 IPv4（排除 clat 翻译接口）
+has_real_ipv4() {
+    ip -4 addr show scope global 2>/dev/null | grep -v "clat" | grep -q "inet "
+}
+
 # 获取公网 IPv4（失败返回空）
+# 注意：464XLAT 运行时 curl -4 也能通（经 NAT64），但那是网关 IP 不能用
 get_ipv4() {
+    # 没有真实 IPv4 地址时直接返回空，避免拿到 NAT64 网关 IP
+    has_real_ipv4 || return 1
     curl -4s --max-time 8 https://ipv4.icanhazip.com 2>/dev/null \
     || curl -4s --max-time 8 https://ip.sb 2>/dev/null \
     || curl -4s --max-time 8 https://ifconfig.me 2>/dev/null | tr -d '[:space:]'
@@ -470,17 +478,23 @@ github_latest_tag() {
 # 国家代码（用于链接备注）
 geo_cc() {
     local cc=""
+    local curl_v=""
+    # 纯 IPv6 机器强制走 IPv6 查，避免经 NAT64 拿到网关所在国的国码
+    # （直接内联检测，避免依赖 xlat.sh 的加载顺序）
+    if ! ip -4 addr show scope global 2>/dev/null | grep -v "clat" | grep -q "inet "; then
+        curl_v="-6"
+    fi
     # 首选 ip.sb（权威，IPv6 库准）
-    cc="$(curl -s --max-time 8 "https://api.ip.sb/geoip" 2>/dev/null \
+    cc="$(curl $curl_v -s --max-time 8 "https://api.ip.sb/geoip" 2>/dev/null \
         | grep -o '"country_code":"[A-Z]*"' | head -1 | cut -d'"' -f4 | tr -d '[:space:]')"
     # 备选 ip-api.com
     if [[ -z "$cc" ]]; then
-        cc="$(curl -s --max-time 8 "http://ip-api.com/line/?fields=countryCode" 2>/dev/null \
+        cc="$(curl $curl_v -s --max-time 8 "http://ip-api.com/line/?fields=countryCode" 2>/dev/null \
             | tr -d '[:space:]')"
     fi
     # 备选 cloudflare trace
     if [[ -z "$cc" ]]; then
-        cc="$(curl -s --max-time 8 "https://www.cloudflare.com/cdn-cgi/trace" 2>/dev/null \
+        cc="$(curl $curl_v -s --max-time 8 "https://www.cloudflare.com/cdn-cgi/trace" 2>/dev/null \
             | grep "^loc=" | cut -d= -f2 | tr -d '[:space:]')"
     fi
     printf '%s' "$cc" || true
