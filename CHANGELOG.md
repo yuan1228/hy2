@@ -1,5 +1,14 @@
 # 更新日志
 
+## v3.6.4 (2026-10-05)
+
+**修复 464XLAT 重启后失效**（巴黎机器实测验证）：
+
+- 修 bug：停用 systemd-resolved，防止重启后 `/etc/resolv.conf` 被重置为 127.0.0.53
+- 修 bug：systemd 服务加 `ExecStartPre`，每次启动自动重写 DNS64
+- 修 bug：新增 `/usr/local/bin/clatd-start.sh` 包装脚本，等 clat 网卡就绪（最多15秒）再设 MTU，解决开机竞态导致的 `activating` 卡死
+- 停止时自动恢复 systemd-resolved；清理时删除包装脚本，零残留
+
 ## v3.6.3 (2026-10-05)
 
 **464XLAT 集成 4 路 PLAT 自动故障切换**：

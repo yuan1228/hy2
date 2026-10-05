@@ -117,7 +117,7 @@ xlat_current_provider() {
 # 启动 464XLAT
 xlat_start() {
     step "启动 464XLAT..."
-    
+
     # 1. 安装 clatd（如未安装）
     if ! command -v clatd >/dev/null 2>&1; then
         step "安装 clatd..."
@@ -127,31 +127,47 @@ xlat_start() {
         }
         ok "clatd 安装完成"
     fi
-    
+
     # 2. 备份 resolv.conf
     if [[ ! -f "$XLAT_RESOLV_BAK" ]]; then
         cp /etc/resolv.conf "$XLAT_RESOLV_BAK" 2>/dev/null
         dim "已备份 resolv.conf"
     fi
-    
-    # 3. 配置 DNS64
+
+    # 3. 停用 systemd-resolved（防止重启后 DNS 被改回 127.0.0.53）
+    if systemctl is-active systemd-resolved >/dev/null 2>&1; then
+        systemctl stop systemd-resolved 2>/dev/null
+        systemctl disable systemd-resolved 2>/dev/null
+        dim "已停用 systemd-resolved（DNS 不会被重置）"
+    fi
+
+    # 4. 配置 DNS64
     printf 'nameserver %s\n' "$XLAT_DNS64_PRIMARY" > /etc/resolv.conf
     ok "DNS64 已配置 ($XLAT_DNS64_PRIMARY)"
-    
-    # 4. 配置 clatd
+
+    # 5. 配置 clatd
     printf 'plat-prefix=%s\n' "$XLAT_PLAT_PRIMARY" > "$XLAT_CLAT_CONF"
     ok "CLAT 已配置 (PLAT=$XLAT_PLAT_PRIMARY)"
-    
-    # 5. 启动 clatd
-    pkill -f clatd 2>/dev/null; sleep 1
-    setsid clatd >/tmp/clatd.log 2>&1 &
-    sleep 3
-    
-    # 6. 设置 MTU
-    ip link set clat mtu 1280 2>/dev/null
 
-    # 7. 创建 systemd 开机自启服务
-    cat > /etc/systemd/system/clatd.service << 'SVCEOF'
+    # 6. 创建 clatd 启动包装脚本（等网卡就绪再设 MTU，避免开机竞态）
+    cat > /usr/local/bin/clatd-start.sh << 'SHEOF'
+#!/bin/bash
+# clatd 启动包装：等网卡就绪再设 MTU（由 yuan 工具箱安装）
+pkill -f "/usr/sbin/clatd" 2>/dev/null
+sleep 1
+/usr/sbin/clatd &
+CLAT_PID=$!
+for i in $(seq 1 15); do
+  ip link show clat >/dev/null 2>&1 && break
+  sleep 1
+done
+ip link set clat mtu 1280 2>/dev/null
+wait $CLAT_PID
+SHEOF
+    chmod +x /usr/local/bin/clatd-start.sh
+
+    # 7. 创建 systemd 开机自启服务（ExecStartPre 每次启动重写 DNS）
+    cat > /etc/systemd/system/clatd.service << SVCEOF
 [Unit]
 Description=464XLAT CLAT daemon
 After=network-online.target
@@ -159,9 +175,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/clatd
-ExecStartPost=/bin/sleep 2
-ExecStartPost=/sbin/ip link set clat mtu 1280
+ExecStartPre=/bin/sh -c "printf 'nameserver $XLAT_DNS64_PRIMARY\\n' > /etc/resolv.conf"
+ExecStart=/usr/local/bin/clatd-start.sh
 Restart=always
 RestartSec=5
 
@@ -170,7 +185,9 @@ WantedBy=multi-user.target
 SVCEOF
     systemctl daemon-reload 2>/dev/null
     systemctl enable clatd 2>/dev/null
-    dim "已设置开机自启"
+    systemctl restart clatd 2>/dev/null
+    sleep 5
+    dim "已设置开机自启（DNS+网卡开机自动恢复）"
 
     # 8. 安装 PLAT 自动故障切换
     xlat_failover_install
@@ -197,6 +214,12 @@ xlat_stop() {
         cp "$XLAT_RESOLV_BAK" /etc/resolv.conf
         dim "resolv.conf 已恢复"
     fi
+    # 恢复 systemd-resolved（如果之前停用过）
+    if [[ -f "$XLAT_RESOLV_BAK" ]] && grep -q "127.0.0.53" "$XLAT_RESOLV_BAK" 2>/dev/null; then
+        systemctl enable systemd-resolved 2>/dev/null
+        systemctl start systemd-resolved 2>/dev/null
+        dim "systemd-resolved 已恢复"
+    fi
     ok "464XLAT 已停止（开机自启已关闭）"
 }
 
@@ -218,6 +241,7 @@ xlat_purge() {
     # 卸载软件
     apt-get remove -y -qq clatd tayga 2>/dev/null
     rm -f "$XLAT_CLAT_CONF" /etc/tayga.conf
+    rm -f /usr/local/bin/clatd-start.sh
     rm -f /tmp/clatd.log "$XLAT_RESOLV_BAK"
     rm -f "$XLAT_FAILOVER_LOG"
     ok "464XLAT 已彻底清理，无残留"
