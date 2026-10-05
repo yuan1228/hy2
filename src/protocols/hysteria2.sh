@@ -369,7 +369,7 @@ hy2_deploy() {
 
     step "[4/6] 写入配置文件…"
     cat > "$HY2_DIR/config.yaml" <<EOF
-listen: [::]:$port
+listen: "[::]:$port"
 
 quic:
   initStreamReceiveWindow: 8388608

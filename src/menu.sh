@@ -91,6 +91,7 @@ draw_menu() {
     echo -e " ${C_GRN}16. NodeQuality${C_RST} ${C_DIM}综合体检：性能+IP质量+网络质量${C_RST}"
     echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
     echo -e " ${C_YLW}00. 检查更新${C_RST}              ${C_RED}88. 退出${C_RST}"
+    echo -e " ${C_RED}99. 卸载工具箱${C_RST}"
     echo -e "${C_BLD}============================================================${C_RST}"
     echo
 }
@@ -166,6 +167,27 @@ show_all_links() {
     pause
 }
 
+# 一键卸载工具箱本身
+uninstall_panel() {
+    echo
+    warn "即将卸载 Yuan VPS 工具箱本体"
+    echo "  将删除：$YUAN_ROOT"
+    echo "  将删除：/usr/local/bin/yuan"
+    echo "  注意：已部署的节点服务（HY2/Xray等）不会被删除"
+    echo
+    read -rp "确认卸载？输入 yes 继续: " confirm
+    if [[ "$confirm" != "yes" ]]; then
+        echo "已取消"
+        sleep 1
+        return
+    fi
+    rm -rf "$YUAN_ROOT"
+    rm -f /usr/local/bin/yuan
+    ok "工具箱已卸载"
+    echo "再见！"
+    exit 0
+}
+
 main_menu() {
     load_modules
     local c
@@ -189,6 +211,7 @@ main_menu() {
             16) net_nodequality ;;
             00) update_panel ;;
             88) echo "再见！"; exit 0 ;;
+            99) uninstall_panel ;;
             *) warn "无效选项"; sleep 1 ;;
         esac
     done
