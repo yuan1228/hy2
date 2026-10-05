@@ -97,6 +97,9 @@ EOF
         [[ -z "$ip" ]] && { err "未提供 IP，部署中止"; echo; pause; return 1; }
     fi
     cc="$(geo_cc)"; [[ -z "$cc" ]] && cc="VPS"
+    echo "  检测到国码：$cc"
+    read -rp "  国码是否正确？直接回车确认，或输入正确国码（如 DE/US/JP）: " cc_input < /dev/tty
+    [[ -n "$cc_input" ]] && cc="$(echo "$cc_input" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
     uri="trojan://$(urlencode "$pass")@${ip}:${port}?sni=$(urlencode "$sni")&allowInsecure=1#${cc}_Trojan"
     printf '%s\n' "$uri" > "$TROJAN_LINK"
     chmod 600 "$TROJAN_LINK"

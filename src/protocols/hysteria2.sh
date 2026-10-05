@@ -434,6 +434,10 @@ EOF
         [[ -z "$ip" ]] && { err "未提供 IP，部署中止"; echo; pause; return 1; }
     fi
     cc="$(geo_cc)"; [[ -z "$cc" ]] && cc="VPS"
+    # 国码手动确认（ip-api 的 IPv6 库常不准，允许手动改）
+    echo "  检测到国码：$cc"
+    read -rp "  国码是否正确？直接回车确认，或输入正确国码（如 DE/US/JP）: " cc_input < /dev/tty
+    [[ -n "$cc_input" ]] && cc="$(echo "$cc_input" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
     uri="hysteria2://$(urlencode "$pass")@${ip}:${port}/?insecure=1&sni=$(urlencode "$sni")&obfs=salamander&obfs-password=$(urlencode "$obfs")"
 
     # 端口跳跃：先建转发规则，再拼 mport 参数

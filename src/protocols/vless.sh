@@ -107,6 +107,9 @@ EOF
         [[ -z "$ip" ]] && { err "未提供 IP，部署中止"; echo; pause; return 1; }
     fi
     cc="$(geo_cc)"; [[ -z "$cc" ]] && cc="VPS"
+    echo "  检测到国码：$cc"
+    read -rp "  国码是否正确？直接回车确认，或输入正确国码（如 DE/US/JP）: " cc_input < /dev/tty
+    [[ -n "$cc_input" ]] && cc="$(echo "$cc_input" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
     uri="vless://${uuid}@${ip}:${port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$(urlencode "$sni")&fp=chrome&pbk=$(urlencode "$pub")&sid=${sid}&type=tcp#${cc}_VLESS"
     printf '%s\n' "$uri" > "$VLESS_LINK"
     chmod 600 "$VLESS_LINK"
