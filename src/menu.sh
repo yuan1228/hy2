@@ -47,6 +47,37 @@ proto_dot() {
     fi
 }
 
+# WARP 状态
+warp_active() { ip -o link show warp 2>/dev/null | grep -q warp; }
+warp_installed() { ip -o link show warp 2>/dev/null | grep -q warp || command -v wg >/dev/null 2>&1; }
+
+# 464XLAT 状态
+xlat_active() { xlat_running 2>/dev/null; }
+xlat_installed() { command -v clatd >/dev/null 2>&1; }
+
+# 通用状态点（WARP/464XLAT 用）
+svc_dot() {
+    local id="$1"
+    if "${id}_active" 2>/dev/null; then
+        printf "${C_GRN}●${C_RST}"
+    elif "${id}_installed" 2>/dev/null; then
+        printf "${C_YLW}◐${C_RST}"
+    else
+        printf "${C_DIM}○${C_RST}"
+    fi
+}
+
+svc_state_text() {
+    local id="$1"
+    if "${id}_active" 2>/dev/null; then
+        printf "${C_GRN}运行中${C_RST}"
+    elif "${id}_installed" 2>/dev/null; then
+        printf "${C_YLW}已安装未运行${C_RST}"
+    else
+        printf "${C_DIM}未安装${C_RST}"
+    fi
+}
+
 proto_state_text() {
     local id="$1" port
     if "${id}_active" 2>/dev/null; then
@@ -70,6 +101,8 @@ draw_header() {
     for id in "${PROTOS[@]}"; do
         printf "  %b %-14s %b\n" "$(proto_dot "$id")" "$(proto_name "$id")" "$(proto_state_text "$id")"
     done
+    printf "  %b %-14s %b\n" "$(svc_dot "warp")" "WARP" "$(svc_state_text "warp")"
+    printf "  %b %-14s %b\n" "$(svc_dot "xlat")" "464XLAT" "$(svc_state_text "xlat")"
     echo -e "${C_BLD}============================================================${C_RST}"
 }
 
@@ -78,7 +111,8 @@ draw_menu() {
     echo -e " ${C_BLD}节点搭建${C_RST}"
     echo -e " ${C_GRN} 1. Hysteria2 管理         2. VLESS+REALITY 管理${C_RST}"
     echo -e " ${C_GRN} 3. Trojan 管理            4. Shadowsocks 管理${C_RST}"
-    echo -e " ${C_GRN} 5. WARP 管理              6. 464XLAT 管理${C_RST}"
+    echo -e " ${C_GRN} 5. WARP 管理${C_RST}"
+    echo -e " ${C_GRN} 6. 464XLAT 管理${C_RST} ${C_DIM}(纯IPv6 VPS访问IPv4：DNS64+NAT64+CLAT一键部署)${C_RST}"
     echo -e " ${C_BLD}------------------------------------------------------------${C_RST}"
     echo -e " ${C_BLD}系统工具${C_RST}"
     echo -e " ${C_GRN} 7. 本机信息               8. 系统更新${C_RST}"

@@ -137,13 +137,26 @@ xlat_menu() {
     while true; do
         clear
         echo "========== 464XLAT 管理 =========="
+        echo ""
+        echo "  464XLAT 是什么？"
+        echo "  纯 IPv6 的 VPS 无法直接访问 IPv4 网络（如 GitHub、Telegram）。"
+        echo "  464XLAT 由三部分组成，一键自动部署："
+        echo "    1. DNS64：将 IPv4 域名解析成特殊的 IPv6 地址"
+        echo "    2. NAT64(PLAT)：公网翻译网关，把 IPv6 流量转成 IPv4"
+        echo "    3. CLAT(clatd)：本机翻译器，让程序无感知使用 IPv4"
+        echo ""
+        echo "  什么时候用？"
+        echo "    - 纯 IPv6 VPS 上装节点、下载 GitHub 文件"
+        echo "    - 让 HY2/VLESS 节点能访问 IPv4 目标"
+        echo "    - 不需要时可随时停止/清理，不留残留"
+        echo ""
         if xlat_running; then
-            echo "状态：运行中"
+            echo "  当前状态：运行中"
         else
-            echo "状态：未运行"
+            echo "  当前状态：未运行"
         fi
         echo ""
-        echo "1. 启动 464XLAT"
+        echo "1. 启动 464XLAT（含 DNS64+NAT64+CLAT）"
         echo "2. 停止 464XLAT"
         echo "3. 删除清理 464XLAT（彻底卸载）"
         echo "4. 查看状态 + 连通性测试"
