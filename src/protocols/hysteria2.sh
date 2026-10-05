@@ -408,6 +408,15 @@ outbounds:
 
 ignoreClientBandwidth: true
 EOF
+    # 校验配置文件非空且 YAML 可解析
+    if [[ ! -s "$HY2_DIR/config.yaml" ]]; then
+        err "配置文件写入失败（文件为空）"
+        echo; pause; return 1
+    fi
+    if ! grep -q "^listen:" "$HY2_DIR/config.yaml"; then
+        err "配置文件损坏（缺少 listen 字段），请检查磁盘空间"
+        echo; pause; return 1
+    fi
     chmod 600 "$HY2_DIR/config.yaml" "$HY2_DIR/server.key"
     chmod 644 "$HY2_DIR/server.crt"
 
