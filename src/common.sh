@@ -469,8 +469,21 @@ github_latest_tag() {
 
 # 国家代码（用于链接备注）
 geo_cc() {
-    curl -s --max-time 8 "http://ip-api.com/line/?fields=countryCode" 2>/dev/null \
-        | tr -d '[:space:]' || true
+    local cc=""
+    # 首选 ip.sb（权威，IPv6 库准）
+    cc="$(curl -s --max-time 8 "https://api.ip.sb/geoip" 2>/dev/null \
+        | grep -o '"country_code":"[A-Z]*"' | head -1 | cut -d'"' -f4 | tr -d '[:space:]')"
+    # 备选 ip-api.com
+    if [[ -z "$cc" ]]; then
+        cc="$(curl -s --max-time 8 "http://ip-api.com/line/?fields=countryCode" 2>/dev/null \
+            | tr -d '[:space:]')"
+    fi
+    # 备选 cloudflare trace
+    if [[ -z "$cc" ]]; then
+        cc="$(curl -s --max-time 8 "https://www.cloudflare.com/cdn-cgi/trace" 2>/dev/null \
+            | grep "^loc=" | cut -d= -f2 | tr -d '[:space:]')"
+    fi
+    printf '%s' "$cc" || true
 }
 
 ensure_dir() { mkdir -p "$1" && chmod 700 "$1"; }
