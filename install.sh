@@ -40,9 +40,28 @@ fi
 
 if [[ -d "$INSTALL_DIR/.git" ]] && command -v git >/dev/null 2>&1; then
     c_info "▸ 检测到旧版本，正在更新…"
-    git -C "$INSTALL_DIR" fetch --quiet origin \
-        && git -C "$INSTALL_DIR" reset --hard origin/main --quiet \
-        || { c_err "更新失败，请检查网络"; exit 1; }
+    if ! git -C "$INSTALL_DIR" fetch --quiet origin 2>/dev/null \
+        || ! git -C "$INSTALL_DIR" reset --hard origin/main --quiet 2>/dev/null; then
+        c_warn "git 更新失败（GitHub 无 IPv6？），改走 jsDelivr 逐文件更新…"
+        _js_ok=1
+        for _f in version.txt yuan install.sh \
+            src/common.sh src/menu.sh src/update.sh \
+            src/protocols/hysteria2.sh src/protocols/_xray.sh src/protocols/vless.sh \
+            src/protocols/trojan.sh src/protocols/shadowsocks.sh \
+            src/net/warp.sh src/net/xlat.sh src/net/tcpquality.sh src/net/nodequality.sh \
+            src/system/firewall.sh src/system/info.sh src/system/maintenance.sh \
+            src/system/pkgs.sh src/system/security.sh src/system/tuning.sh; do
+            mkdir -p "$INSTALL_DIR/$(dirname "$_f")"
+            if ! curl -fsSL --max-time 30 "https://cdn.jsdelivr.net/gh/yuan1228/hy2@main/$_f" \
+                -o "$INSTALL_DIR/$_f" 2>/dev/null; then
+                c_err "文件更新失败：$_f"
+                _js_ok=0
+                break
+            fi
+        done
+        [[ "$_js_ok" == "1" ]] || { c_err "更新失败，请检查网络"; exit 1; }
+        c_info "▸ jsDelivr 更新完成"
+    fi
 elif command -v git >/dev/null 2>&1; then
     c_info "▸ 克隆仓库…"
     rm -rf "$INSTALL_DIR"
@@ -55,7 +74,7 @@ elif command -v git >/dev/null 2>&1; then
             src/common.sh src/menu.sh src/update.sh \
             src/protocols/hysteria2.sh src/protocols/_xray.sh src/protocols/vless.sh \
             src/protocols/trojan.sh src/protocols/shadowsocks.sh \
-            src/net/warp.sh src/net/tcpquality.sh src/net/nodequality.sh \
+            src/net/warp.sh src/net/xlat.sh src/net/tcpquality.sh src/net/nodequality.sh \
             src/system/firewall.sh src/system/info.sh src/system/maintenance.sh \
             src/system/pkgs.sh src/system/security.sh src/system/tuning.sh; do
             mkdir -p "$INSTALL_DIR/$(dirname "$_f")"
