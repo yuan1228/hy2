@@ -369,10 +369,8 @@ hy2_deploy() {
 
     step "[4/6] 写入配置文件…"
     cat > "$HY2_DIR/config.yaml" <<EOF
-# 监听 IPv6 [::]，兼容纯 IPv6 环境
 listen: [::]:$port
 
-# QUIC 参数优化（适配 MTU=1280 的 464XLAT/CLAT 网络）
 quic:
   initStreamReceiveWindow: 8388608
   maxStreamReceiveWindow: 8388608
@@ -401,7 +399,6 @@ masquerade:
     url: https://$sni
     rewriteHost: true
 
-# 出站经本机 464XLAT 访问 IPv4（纯 IPv6 环境自动生效）
 outbounds:
   - name: direct
     type: direct
